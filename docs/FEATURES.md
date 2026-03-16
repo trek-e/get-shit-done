@@ -370,9 +370,24 @@
 
 ---
 
+### 13. Note Capture
+
+**Command:** `/gsd:note`
+
+**Purpose:** Zero-friction idea capture without interrupting workflow. Append timestamped notes, list all notes, or promote notes to structured todos.
+
+**Requirements:**
+- REQ-NOTE-01: System MUST save timestamped note files with a single Write call
+- REQ-NOTE-02: System MUST support `list` subcommand to show all notes from project and global scopes
+- REQ-NOTE-03: System MUST support `promote N` subcommand to convert a note into a structured todo
+- REQ-NOTE-04: System MUST support `--global` flag for global scope operations
+- REQ-NOTE-05: System MUST NOT use Task, AskUserQuestion, or Bash — runs inline only
+
+---
+
 ## Quality Assurance Features
 
-### 13. Nyquist Validation
+### 14. Nyquist Validation
 
 **Purpose:** Map automated test coverage to phase requirements before any code is written. Named after the Nyquist sampling theorem — ensures a feedback signal exists for every requirement.
 
@@ -395,7 +410,7 @@
 
 ---
 
-### 14. Plan Checking
+### 15. Plan Checking
 
 **Purpose:** Goal-backward verification that plans will achieve phase objectives before execution.
 
@@ -407,7 +422,7 @@
 
 ---
 
-### 15. Post-Execution Verification
+### 16. Post-Execution Verification
 
 **Purpose:** Automated check that the codebase delivers what the phase promised.
 
@@ -419,7 +434,7 @@
 
 ---
 
-### 16. Node Repair
+### 17. Node Repair
 
 **Purpose:** Autonomous recovery when task verification fails during execution.
 
@@ -433,7 +448,7 @@
 
 ---
 
-### 17. Health Validation
+### 18. Health Validation
 
 **Command:** `/gsd:health [--repair]`
 
@@ -450,7 +465,7 @@
 
 ## Context Engineering Features
 
-### 18. Context Window Monitoring
+### 19. Context Window Monitoring
 
 **Purpose:** Prevent context rot by alerting both user and agent when context is running low.
 
@@ -470,7 +485,7 @@
 
 ---
 
-### 19. Session Management
+### 20. Session Management
 
 **Commands:** `/gsd:pause-work`, `/gsd:resume-work`, `/gsd:progress`
 
@@ -485,7 +500,7 @@
 
 ---
 
-### 20. Multi-Agent Orchestration
+### 21. Multi-Agent Orchestration
 
 **Purpose:** Coordinate specialized agents with fresh context windows for each task.
 
@@ -499,7 +514,7 @@
 
 ---
 
-### 21. Model Profiles
+### 22. Model Profiles
 
 **Command:** `/gsd:set-profile <quality|balanced|budget|inherit>`
 
@@ -534,7 +549,7 @@
 
 ## Brownfield Features
 
-### 22. Codebase Mapping
+### 23. Codebase Mapping
 
 **Command:** `/gsd:map-codebase [area]`
 
@@ -562,7 +577,7 @@
 
 ## Utility Features
 
-### 23. Debug System
+### 24. Debug System
 
 **Command:** `/gsd:debug [description]`
 
@@ -580,7 +595,7 @@
 
 ---
 
-### 24. Todo Management
+### 25. Todo Management
 
 **Commands:** `/gsd:add-todo [desc]`, `/gsd:check-todos`
 
@@ -594,7 +609,7 @@
 
 ---
 
-### 25. Statistics Dashboard
+### 26. Statistics Dashboard
 
 **Command:** `/gsd:stats`
 
@@ -608,7 +623,7 @@
 
 ---
 
-### 26. Update System
+### 27. Update System
 
 **Command:** `/gsd:update`
 
@@ -623,7 +638,7 @@
 
 ---
 
-### 27. Settings Management
+### 28. Settings Management
 
 **Command:** `/gsd:settings`
 
@@ -656,7 +671,7 @@
 
 ---
 
-### 28. Test Generation
+### 29. Test Generation
 
 **Command:** `/gsd:add-tests [N]`
 
@@ -671,7 +686,7 @@
 
 ## Infrastructure Features
 
-### 29. Git Integration
+### 30. Git Integration
 
 **Purpose:** Atomic commits, branching strategies, and clean history management.
 
@@ -697,7 +712,7 @@ fix(03-01): correct auth token expiry
 
 ---
 
-### 30. CLI Tools
+### 31. CLI Tools
 
 **Purpose:** Programmatic utilities for workflows and agents, replacing repetitive inline bash patterns.
 
@@ -712,7 +727,7 @@ fix(03-01): correct auth token expiry
 
 ---
 
-### 31. Multi-Runtime Support
+### 32. Multi-Runtime Support
 
 **Purpose:** Run GSD across 6 different AI coding agent runtimes.
 
@@ -735,7 +750,7 @@ fix(03-01): correct auth token expiry
 
 ---
 
-### 32. Hook System
+### 33. Hook System
 
 **Purpose:** Runtime event hooks for context monitoring, status display, and update checking.
 
