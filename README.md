@@ -548,6 +548,7 @@ You're never locked in. The system adapts.
 | `/gsd:quick [--full] [--discuss] [--research]` | Execute ad-hoc task with GSD guarantees (`--full` adds plan-checking and verification, `--discuss` gathers context first, `--research` investigates approaches before planning) |
 | `/gsd:health [--repair]` | Validate `.planning/` directory integrity, auto-repair with `--repair` |
 | `/gsd:stats` | Display project statistics — phases, plans, requirements, git metrics |
+| `/gsd:profile-user [--questionnaire] [--refresh]` | Generate developer behavioral profile from session analysis for personalized responses |
 
 <sup>¹ Contributed by reddit user OracleGreyBeard</sup>
 
