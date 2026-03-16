@@ -54,6 +54,12 @@ All subsequent commits go to this branch. User handles merging.
 From init JSON: `phase_dir`, `plan_count`, `incomplete_count`.
 
 Report: "Found {plan_count} plans in {phase_dir} ({incomplete_count} incomplete)"
+
+**Update STATE.md for phase start:**
+```bash
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" state begin-phase --phase "${PHASE_NUMBER}" --name "${PHASE_NAME}" --plans "${PLAN_COUNT}"
+```
+This updates Status, Last Activity, Current focus, Current Position, and plan counts in STATE.md so frontmatter and body text reflect the active phase immediately.
 </step>
 
 <step name="discover_and_group_plans">
