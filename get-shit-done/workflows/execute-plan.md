@@ -370,7 +370,7 @@ One-liner SUBSTANTIVE: "JWT auth with refresh rotation using jose library" not "
 
 Include: duration, start/end times, task count, file count.
 
-Next: more plans → "Ready for {next-plan}" | last → "Phase complete, ready for transition".
+Next: more plans → "Ready for {next-plan}" | last → "Phase complete, ready for next step".
 </step>
 
 <step name="update_current_position">

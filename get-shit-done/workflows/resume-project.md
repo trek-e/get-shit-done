@@ -154,7 +154,7 @@ Based on project state, determine the most logical next action:
 → Option: Abandon and move on
 
 **If phase in progress, all plans complete:**
-→ Primary: Transition to next phase
+→ Primary: Advance to next phase (via internal transition workflow)
 → Option: Review completed work
 
 **If phase ready to plan:**
@@ -242,7 +242,7 @@ Based on user selection, route to appropriate workflow:
 
   ---
   ```
-- **Transition** → ./transition.md
+- **Advance to next phase** → ./transition.md (internal workflow, invoked inline — NOT a user command)
 - **Check todos** → Read .planning/todos/pending/, present summary
 - **Review alignment** → Read PROJECT.md, compare to current state
 - **Something else** → Ask what they need

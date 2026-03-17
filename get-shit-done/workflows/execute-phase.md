@@ -465,6 +465,8 @@ Read and follow `~/.claude/get-shit-done/workflows/transition.md`, passing throu
 
 **STOP. Do not auto-advance. Do not execute transition. Do not plan next phase. Present options to the user and wait.**
 
+**IMPORTANT: There is NO `/gsd:transition` command. Never suggest it. The transition workflow is internal only.**
+
 ```
 ## ✓ Phase {X}: {Name} Complete
 
@@ -473,6 +475,8 @@ Read and follow `~/.claude/get-shit-done/workflows/transition.md`, passing throu
 /gsd:plan-phase {next} — plan next phase
 /gsd:execute-phase {next} — execute next phase
 ```
+
+Only suggest the commands listed above. Do not invent or hallucinate command names.
 </step>
 
 </process>
