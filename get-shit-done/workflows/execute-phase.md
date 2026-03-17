@@ -6,6 +6,20 @@ Execute all plans in a phase using wave-based parallel execution. Orchestrator s
 Orchestrator coordinates, not executes. Each subagent loads the full execute-plan context. Orchestrator: discover plans → analyze deps → group waves → spawn agents → handle checkpoints → collect results.
 </core_principle>
 
+<runtime_compatibility>
+**Subagent spawning is runtime-specific:**
+- **Claude Code:** Uses `Task(subagent_type="gsd-executor", ...)` — blocks until complete, returns result
+- **Copilot:** Uses `@gsd-executor` agent reference — if subagent spawning hangs or fails to return,
+  fall back to **sequential inline execution**: read and follow execute-plan.md directly for each plan
+  instead of spawning parallel agents. This is slower but reliable.
+- **Other runtimes (Gemini, Codex, OpenCode):** If Task/subagent API is unavailable, use sequential
+  inline execution as the fallback.
+
+**Fallback rule:** If a spawned agent completes its work (commits visible, SUMMARY.md exists) but
+the orchestrator never receives the completion signal, treat it as successful based on spot-checks
+and continue to the next wave/plan.
+</runtime_compatibility>
+
 <required_reading>
 Read STATE.md before any operation to load project context.
 </required_reading>
