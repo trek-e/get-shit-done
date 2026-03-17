@@ -171,6 +171,7 @@
 - REQ-PLAN-06: System MUST support `--skip-research` flag to bypass research phase
 - REQ-PLAN-07: System MUST prompt user to run `/gsd:ui-phase` if frontend phase detected and no UI-SPEC.md exists (UI safety gate)
 - REQ-PLAN-08: System MUST include Nyquist validation mapping when `workflow.nyquist_validation` is enabled
+- REQ-PLAN-09: System MUST verify all phase requirements are covered by at least one plan before planning completes (requirements coverage gate)
 
 **Produces:**
 | Artifact | Description |

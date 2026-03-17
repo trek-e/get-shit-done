@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Pre-wave dependency check in `execute-phase`: verifies key-links from prior wave artifacts before spawning next wave
   - Cross-Plan Data Contracts (Dimension 9) in plan-checker: detects incompatible transformations between plans sharing data pipelines
   - Export-level spot check in `verify-phase`: catches dead stores that exist in wired files but are never called
+- **Requirements coverage gate in plan-phase** — New step 13 verifies all phase requirements are covered by at least one plan before planning completes. Cross-checks REQ-IDs from ROADMAP against plan frontmatter and CONTEXT.md features against plan objectives (#984)
 
 ### Fixed
 - **Requirements `mark-complete` is now idempotent** — Re-marking already-completed requirements returns `already_complete` instead of `not_found` (#948)
