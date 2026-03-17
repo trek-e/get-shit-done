@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Pre-wave dependency check in `execute-phase`: verifies key-links from prior wave artifacts before spawning next wave
   - Cross-Plan Data Contracts (Dimension 9) in plan-checker: detects incompatible transformations between plans sharing data pipelines
   - Export-level spot check in `verify-phase`: catches dead stores that exist in wired files but are never called
+- **Todo cross-reference in discuss-phase** — New `cross_reference_todos` step checks pending todos for relevance to the current phase, lets users fold them into scope or mark as reviewed. Prevents silent scope gaps where earlier phases captured work that gets missed (#1111)
 
 ### Fixed
 - **Requirements `mark-complete` is now idempotent** — Re-marking already-completed requirements returns `already_complete` instead of `not_found` (#948)

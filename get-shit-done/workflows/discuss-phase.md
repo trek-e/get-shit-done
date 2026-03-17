@@ -284,6 +284,41 @@ From the scan, identify:
 Store as internal `<codebase_context>` for use in analyze_phase and present_gray_areas. This is NOT written to a file — it's used within this session only.
 </step>
 
+<step name="cross_reference_todos">
+Check if any pending todos are relevant to this phase's scope. Prevents silent scope gaps where earlier phases captured work that belongs in this phase.
+
+```bash
+TODO_INIT=$(node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" init todos)
+if [[ "$TODO_INIT" == @file:* ]]; then TODO_INIT=$(cat "${TODO_INIT#@file:}"); fi
+```
+
+Parse `todo_count` from JSON. **If 0: skip this step entirely** (no workflow slowdown).
+
+**If todos exist:** Extract phase goal keywords from ROADMAP.md. For each pending todo, check relevance via:
+- **Area match** — todo `area` field overlaps with phase domain
+- **File match** — todo `files` reference paths this phase will touch
+- **Keyword match** — todo title/description contains phase goal terms
+
+**If relevant todos found:**
+
+```
+AskUserQuestion:
+  question: "Found {N} pending todo(s) that may be relevant to Phase {X}. Fold any into this phase's scope?"
+  allowMultiple: true
+  options:
+    - label: "{todo_title_1}"
+      description: "From: {todo_file} — {todo_description_preview}"
+    - label: "{todo_title_2}"
+      description: "From: {todo_file} — {todo_description_preview}"
+    ...
+```
+
+**Selected todos** → store as `folded_todos` for inclusion in CONTEXT.md `<decisions>` section.
+**Unselected todos** → store as `reviewed_todos` for inclusion in CONTEXT.md `<deferred>` section.
+
+**If no relevant todos:** Skip silently.
+</step>
+
 <step name="analyze_phase">
 Analyze the phase to identify gray areas worth discussing. **Use both `prior_decisions` and `codebase_context` to ground the analysis.**
 
@@ -544,7 +579,23 @@ mkdir -p ".planning/phases/${padded_phase}-${phase_slug}"
 ### Claude's Discretion
 [Areas where user said "you decide" — note that Claude has flexibility here]
 
+### Folded Todos
+[Only include if `folded_todos` is non-empty from cross_reference_todos step]
+- **{todo_title}**: {todo_description} — Folded from backlog into this phase's scope
+
 </decisions>
+
+<deferred>
+## Deferred Items
+
+### Reviewed Todos (not folded)
+[Only include if `reviewed_todos` is non-empty from cross_reference_todos step]
+- **{todo_title}**: {todo_description} — Reviewed, deemed out of scope for this phase
+
+### Deferred Ideas
+[Ideas that surfaced during discussion but belong in a future phase]
+
+</deferred>
 
 <canonical_refs>
 ## Canonical References

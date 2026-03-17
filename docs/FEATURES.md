@@ -111,6 +111,7 @@
 - REQ-DISC-05: System MUST support `--auto` flag to auto-select recommended defaults
 - REQ-DISC-06: System MUST support `--batch` flag for grouped question intake
 - REQ-DISC-07: System MUST scout relevant source files before identifying gray areas (code-aware discussion)
+- REQ-DISC-08: System MUST cross-reference pending todos for phase relevance and let users fold them into scope
 
 **Produces:** `{padded_phase}-CONTEXT.md` — User preferences that feed into research and planning
 
