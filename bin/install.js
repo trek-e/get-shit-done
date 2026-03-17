@@ -2689,6 +2689,36 @@ function install(isGlobal, runtime = 'claude') {
     const agentCount = installCodexConfig(targetDir, agentsSrc);
     console.log(`  ${green}✓${reset} Generated config.toml with ${agentCount} agent roles`);
     console.log(`  ${green}✓${reset} Generated ${agentCount} agent .toml config files`);
+
+    // Add Codex hooks (SessionStart for update checking) — requires codex_hooks feature flag
+    const configPath = path.join(targetDir, 'config.toml');
+    try {
+      let configContent = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf-8') : '';
+
+      // Enable hooks feature flag if not present
+      if (!configContent.includes('codex_hooks')) {
+        const featuresSection = '[features]\ncodex_hooks = true\n';
+        if (configContent.includes('[features]')) {
+          configContent = configContent.replace(/\[features\]\n/, featuresSection);
+        } else {
+          configContent = featuresSection + '\n' + configContent;
+        }
+      }
+
+      // Add SessionStart hook for update checking
+      const updateCheckScript = path.resolve(targetDir, 'get-shit-done', 'hooks', 'gsd-update-check.js').replace(/\\/g, '/');
+      const hookBlock = `\n# GSD Hooks\n[[hooks]]\nevent = "SessionStart"\ncommand = "node ${updateCheckScript}"\n`;
+
+      if (!configContent.includes('gsd-update-check')) {
+        configContent += hookBlock;
+      }
+
+      fs.writeFileSync(configPath, configContent, 'utf-8');
+      console.log(`  ${green}✓${reset} Configured Codex hooks (SessionStart)`);
+    } catch (e) {
+      console.warn(`  ${yellow}⚠${reset}  Could not configure Codex hooks: ${e.message}`);
+    }
+
     return { settingsPath: null, settings: null, statuslineCommand: null, runtime };
   }
 
