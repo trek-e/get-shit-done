@@ -880,6 +880,34 @@ function cmdPhaseComplete(cwd, phaseNum, raw) {
       `$1Phase ${phaseNum} complete${nextPhaseNum ? `, transitioned to Phase ${nextPhaseNum}` : ''}`
     );
 
+    // Increment Completed Phases counter (#956)
+    const completedMatch = stateContent.match(/\*\*Completed Phases:\*\*\s*(\d+)/);
+    if (completedMatch) {
+      const newCompleted = parseInt(completedMatch[1], 10) + 1;
+      stateContent = stateContent.replace(
+        /(\*\*Completed Phases:\*\*\s*)\d+/,
+        `$1${newCompleted}`
+      );
+
+      // Recalculate percent based on completed / total (#956)
+      const totalMatch = stateContent.match(/\*\*Total Phases:\*\*\s*(\d+)/);
+      if (totalMatch) {
+        const totalPhases = parseInt(totalMatch[1], 10);
+        if (totalPhases > 0) {
+          const newPercent = Math.round((newCompleted / totalPhases) * 100);
+          stateContent = stateContent.replace(
+            /(\*\*Progress:\*\*\s*)\d+%/,
+            `$1${newPercent}%`
+          );
+          // Also update percent field if it exists separately
+          stateContent = stateContent.replace(
+            /(percent:\s*)\d+/,
+            `$1${newPercent}`
+          );
+        }
+      }
+    }
+
     writeStateMd(statePath, stateContent, cwd);
   }
 

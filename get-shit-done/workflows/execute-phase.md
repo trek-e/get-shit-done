@@ -412,6 +412,28 @@ node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs(phase-{X}): co
 ```
 </step>
 
+<step name="update_project_md">
+**Evolve PROJECT.md to reflect phase completion (prevents planning document drift — #956):**
+
+PROJECT.md tracks validated requirements, decisions, and current state. Without this step,
+PROJECT.md falls behind silently over multiple phases.
+
+1. Read `.planning/PROJECT.md`
+2. If the file exists and has a `## Validated Requirements` or `## Requirements` section:
+   - Move any requirements validated by this phase from Active → Validated
+   - Add a brief note: `Validated in Phase {X}: {Name}`
+3. If the file has a `## Current State` or similar section:
+   - Update it to reflect this phase's completion (e.g., "Phase {X} complete — {one-liner}")
+4. Update the `Last updated:` footer to today's date
+5. Commit the change:
+
+```bash
+node "$HOME/.claude/get-shit-done/bin/gsd-tools.cjs" commit "docs(phase-{X}): evolve PROJECT.md after phase completion" --files .planning/PROJECT.md
+```
+
+**Skip this step if** `.planning/PROJECT.md` does not exist.
+</step>
+
 <step name="offer_next">
 
 **Exception:** If `gaps_found`, the `verify_phase_goal` step already presents the gap-closure path (`/gsd:plan-phase {X} --gaps`). No additional routing needed — skip auto-advance.
