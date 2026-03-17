@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Pre-wave dependency check in `execute-phase`: verifies key-links from prior wave artifacts before spawning next wave
   - Cross-Plan Data Contracts (Dimension 9) in plan-checker: detects incompatible transformations between plans sharing data pipelines
   - Export-level spot check in `verify-phase`: catches dead stores that exist in wired files but are never called
+- **`/gsd:ship` command** — Native PR creation workflow that bridges local completion → merged PR. Auto-generates rich PR body from planning artifacts (SUMMARY.md, VERIFICATION.md, REQUIREMENTS.md), pushes branch, creates PR via `gh`, optionally requests review, and updates STATE.md with shipping status (#829)
 
 ### Fixed
 - **Requirements `mark-complete` is now idempotent** — Re-marking already-completed requirements returns `already_complete` instead of `not_found` (#948)
