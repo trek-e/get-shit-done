@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Pre-wave dependency check in `execute-phase`: verifies key-links from prior wave artifacts before spawning next wave
   - Cross-Plan Data Contracts (Dimension 9) in plan-checker: detects incompatible transformations between plans sharing data pipelines
   - Export-level spot check in `verify-phase`: catches dead stores that exist in wired files but are never called
+- **Cross-phase regression gate** — New `regression_gate` step in `execute-phase` runs prior phases' test suites after execution completes but before verification, catching regressions before they compound (#945)
 
 ### Fixed
 - **Requirements `mark-complete` is now idempotent** — Re-marking already-completed requirements returns `already_complete` instead of `not_found` (#948)

@@ -220,6 +220,7 @@
 - REQ-EXEC-06: System MUST run post-execution verifier to check phase goals were met
 - REQ-EXEC-07: System MUST support git branching strategies (`none`, `phase`, `milestone`)
 - REQ-EXEC-08: System MUST invoke node repair operator on task verification failure (when enabled)
+- REQ-EXEC-09: System MUST run prior phases' test suites before verification to catch cross-phase regressions
 
 **Produces:**
 | Artifact | Description |
