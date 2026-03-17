@@ -64,6 +64,7 @@ function loadConfig(cwd) {
     nyquist_validation: true,
     parallelization: true,
     brave_search: false,
+    resolve_model_ids: false, // when true, resolve aliases (opus/sonnet/haiku) to full model IDs
   };
 
   try {
@@ -106,6 +107,7 @@ function loadConfig(cwd) {
       nyquist_validation: get('nyquist_validation', { section: 'workflow', field: 'nyquist_validation' }) ?? defaults.nyquist_validation,
       parallelization,
       brave_search: get('brave_search') ?? defaults.brave_search,
+      resolve_model_ids: get('resolve_model_ids') ?? defaults.resolve_model_ids,
       model_overrides: parsed.model_overrides || null,
     };
   } catch {
@@ -472,6 +474,19 @@ function getRoadmapPhaseInternal(cwd, phaseNum) {
   }
 }
 
+// ─── Model alias resolution ───────────────────────────────────────────────────
+
+/**
+ * Map short model aliases to full model IDs.
+ * Updated each release to match current model versions.
+ * Users can override with model_overrides in config.json for custom/latest models.
+ */
+const MODEL_ALIAS_MAP = {
+  'opus': 'claude-opus-4-0',
+  'sonnet': 'claude-sonnet-4-5',
+  'haiku': 'claude-haiku-3-5',
+};
+
 function resolveModelInternal(cwd, agentType) {
   const config = loadConfig(cwd);
 
@@ -486,7 +501,15 @@ function resolveModelInternal(cwd, agentType) {
   const agentModels = MODEL_PROFILES[agentType];
   if (!agentModels) return 'sonnet';
   if (profile === 'inherit') return 'inherit';
-  return agentModels[profile] || agentModels['balanced'] || 'sonnet';
+  const alias = agentModels[profile] || agentModels['balanced'] || 'sonnet';
+
+  // If resolve_model_ids is true, map alias to full model ID
+  // This prevents 404s when the Task tool passes aliases directly to the API
+  if (config.resolve_model_ids) {
+    return MODEL_ALIAS_MAP[alias] || alias;
+  }
+
+  return alias;
 }
 
 // ─── Misc utilities ───────────────────────────────────────────────────────────
@@ -599,4 +622,5 @@ module.exports = {
   stripShippedMilestones,
   replaceInCurrentMilestone,
   toPosixPath,
+  MODEL_ALIAS_MAP,
 };
