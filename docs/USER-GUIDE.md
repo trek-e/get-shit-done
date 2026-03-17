@@ -295,7 +295,7 @@ Controlled by `workflow.ui_safety_gate` config toggle.
 |---------|---------|-------------|
 | `/gsd:progress` | Show status and next steps | Anytime -- "where am I?" |
 | `/gsd:resume-work` | Restore full context from last session | Starting a new session |
-| `/gsd:pause-work` | Save context handoff | Stopping mid-phase |
+| `/gsd:pause-work` | Save structured handoff (HANDOFF.json + continue-here.md) | Stopping mid-phase |
 | `/gsd:help` | Show all commands | Quick reference |
 | `/gsd:update` | Update GSD with changelog preview | Check for new versions |
 | `/gsd:join-discord` | Open Discord community invite | Questions or community |

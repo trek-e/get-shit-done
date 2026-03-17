@@ -16,6 +16,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 - **Requirements `mark-complete` is now idempotent** — Re-marking already-completed requirements returns `already_complete` instead of `not_found` (#948)
 
+### Improved
+- **Structured session handoff** — `/gsd:pause-work` now writes `.planning/HANDOFF.json` alongside `.continue-here.md`. JSON provides machine-readable state (task position, blockers, human actions pending, uncommitted files) that `/gsd:resume-work` parses for precise resumption instead of generic "what do you want to do?" (#940)
+
 ## [1.25.0] - 2026-03-16
 
 ### Added
