@@ -10,6 +10,24 @@ Orchestrator coordinates, not executes. Each subagent loads the full execute-pla
 Read STATE.md before any operation to load project context.
 </required_reading>
 
+<available_agent_types>
+These are the valid GSD subagent types registered in .claude/agents/ (or equivalent for your runtime).
+Always use the exact name from this list — do not fall back to 'general-purpose' or other built-in types:
+
+- gsd-executor — Executes plan tasks, commits, creates SUMMARY.md
+- gsd-verifier — Verifies phase completion, checks quality gates
+- gsd-planner — Creates detailed plans from phase scope
+- gsd-phase-researcher — Researches technical approaches for a phase
+- gsd-plan-checker — Reviews plan quality before execution
+- gsd-debugger — Diagnoses and fixes issues
+- gsd-codebase-mapper — Maps project structure and dependencies
+- gsd-integration-checker — Checks cross-phase integration
+- gsd-nyquist-auditor — Validates verification coverage
+- gsd-ui-researcher — Researches UI/UX approaches
+- gsd-ui-checker — Reviews UI implementation quality
+- gsd-ui-auditor — Audits UI against design requirements
+</available_agent_types>
+
 <process>
 
 <step name="initialize" priority="first">

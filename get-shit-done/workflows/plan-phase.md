@@ -8,6 +8,13 @@ Read all files referenced by the invoking prompt's execution_context before star
 @~/.claude/get-shit-done/references/ui-brand.md
 </required_reading>
 
+<available_agent_types>
+Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
+- gsd-phase-researcher — Researches technical approaches for a phase
+- gsd-planner — Creates detailed plans from phase scope
+- gsd-plan-checker — Reviews plan quality before execution
+</available_agent_types>
+
 <process>
 
 ## 1. Initialize
