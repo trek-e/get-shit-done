@@ -552,7 +552,7 @@ function convertClaudeToCopilotContent(content, isGlobal = false) {
   // CONV-07: Command name conversion (all gsd: references → gsd-)
   c = c.replace(/gsd:/g, 'gsd-');
   // Runtime-neutral agent name replacement (#766)
-  c = neutralizeAgentReferences(c, 'COPILOT.md');
+  c = neutralizeAgentReferences(c, 'copilot-instructions.md');
   return c;
 }
 
