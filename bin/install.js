@@ -551,6 +551,8 @@ function convertClaudeToCopilotContent(content, isGlobal = false) {
   c = c.replace(/\.claude\//g, '.github/');
   // CONV-07: Command name conversion (all gsd: references → gsd-)
   c = c.replace(/gsd:/g, 'gsd-');
+  // Runtime-neutral agent name replacement (#766)
+  c = neutralizeAgentReferences(c, 'COPILOT.md');
   return c;
 }
 
@@ -641,6 +643,8 @@ function convertClaudeToAntigravityContent(content, isGlobal = false) {
   c = c.replace(/\.claude\//g, '.agent/');
   // Command name conversion (all gsd: references → gsd-)
   c = c.replace(/gsd:/g, 'gsd-');
+  // Runtime-neutral agent name replacement (#766)
+  c = neutralizeAgentReferences(c, 'GEMINI.md');
   return c;
 }
 
@@ -728,6 +732,8 @@ function convertSlashCommandsToCodexSkillMentions(content) {
 function convertClaudeToCodexMarkdown(content) {
   let converted = convertSlashCommandsToCodexSkillMentions(content);
   converted = converted.replace(/\$ARGUMENTS\b/g, '{{GSD_ARGS}}');
+  // Runtime-neutral agent name replacement (#766)
+  converted = neutralizeAgentReferences(converted, 'AGENTS.md');
   return converted;
 }
 
@@ -1036,6 +1042,36 @@ function installCodexConfig(targetDir, agentsSrc) {
  * Terminals don't support subscript — Gemini renders these as raw HTML.
  * Converts <sub>text</sub> to italic *(text)* for readable terminal output.
  */
+/**
+ * Runtime-neutral agent name and instruction file replacement.
+ * Used by ALL non-Claude runtime converters to avoid Claude-specific
+ * references in workflow prompts, agent definitions, and documentation.
+ *
+ * Replaces:
+ * - Standalone "Claude" (agent name) → "the agent"
+ *   Preserves: "Claude Code" (product), "Claude Opus/Sonnet/Haiku" (models),
+ *   "claude-" (prefixes), "CLAUDE.md" (handled separately)
+ * - "CLAUDE.md" → runtime-appropriate instruction file
+ * - "Do NOT load full AGENTS.md" → removed (harmful for AGENTS.md runtimes)
+ *
+ * @param {string} content - File content to neutralize
+ * @param {string} instructionFile - Runtime's instruction file ('AGENTS.md', 'GEMINI.md', etc.)
+ * @returns {string} Content with runtime-neutral references
+ */
+function neutralizeAgentReferences(content, instructionFile) {
+  let c = content;
+  // Replace standalone "Claude" (the agent) but preserve product/model names.
+  // Negative lookahead avoids: Claude Code, Claude Opus/Sonnet/Haiku, Claude native, Claude-based
+  c = c.replace(/\bClaude(?! Code| Opus| Sonnet| Haiku| native| based|-)\b(?!\.md)/g, 'the agent');
+  // Replace CLAUDE.md with runtime-appropriate instruction file
+  if (instructionFile) {
+    c = c.replace(/CLAUDE\.md/g, instructionFile);
+  }
+  // Remove instructions that conflict with AGENTS.md-based runtimes
+  c = c.replace(/Do NOT load full `AGENTS\.md` files[^\n]*/g, '');
+  return c;
+}
+
 function stripSubTags(content) {
   return content.replace(/<sub>(.*?)<\/sub>/g, '*($1)*');
 }
@@ -1140,7 +1176,9 @@ function convertClaudeToGeminiAgent(content) {
   // is equivalent bash and invisible to Gemini's /\$\{(\w+)\}/g regex.
   const escapedBody = body.replace(/\$\{(\w+)\}/g, '$$$1');
 
-  return `---\n${newFrontmatter}\n---${stripSubTags(escapedBody)}`;
+  // Runtime-neutral agent name replacement (#766)
+  const neutralBody = neutralizeAgentReferences(escapedBody, 'GEMINI.md');
+  return `---\n${newFrontmatter}\n---${stripSubTags(neutralBody)}`;
 }
 
 function convertClaudeToOpencodeFrontmatter(content, { isAgent = false } = {}) {
@@ -1156,6 +1194,8 @@ function convertClaudeToOpencodeFrontmatter(content, { isAgent = false } = {}) {
   convertedContent = convertedContent.replace(/\$HOME\/\.claude\b/g, '$HOME/.config/opencode');
   // Replace general-purpose subagent type with OpenCode's equivalent "general"
   convertedContent = convertedContent.replace(/subagent_type="general-purpose"/g, 'subagent_type="general"');
+  // Runtime-neutral agent name replacement (#766)
+  convertedContent = neutralizeAgentReferences(convertedContent, 'AGENTS.md');
 
   // Check if content has frontmatter
   if (!convertedContent.startsWith('---')) {
@@ -3054,6 +3094,7 @@ if (process.env.GSD_TEST_MODE) {
     installCodexConfig,
     convertClaudeCommandToCodexSkill,
     convertClaudeToOpencodeFrontmatter,
+    neutralizeAgentReferences,
     GSD_CODEX_MARKER,
     CODEX_AGENT_SANDBOX,
     getDirName,
