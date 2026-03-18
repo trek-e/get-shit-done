@@ -13,9 +13,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Cross-Plan Data Contracts (Dimension 9) in plan-checker: detects incompatible transformations between plans sharing data pipelines
   - Export-level spot check in `verify-phase`: catches dead stores that exist in wired files but are never called
 - **Requirements coverage gate in plan-phase** — New step 13 verifies all phase requirements are covered by at least one plan before planning completes. Cross-checks REQ-IDs from ROADMAP against plan frontmatter and CONTEXT.md features against plan objectives (#984)
+- **`/gsd:ship` command** — Native PR creation workflow that bridges local completion → merged PR. Auto-generates rich PR body from planning artifacts (SUMMARY.md, VERIFICATION.md, REQUIREMENTS.md), pushes branch, creates PR via `gh`, optionally requests review, and updates STATE.md with shipping status (#829)
 
 ### Fixed
 - **Requirements `mark-complete` is now idempotent** — Re-marking already-completed requirements returns `already_complete` instead of `not_found` (#948)
+
+### Improved
+- **Structured session handoff** — `/gsd:pause-work` now writes `.planning/HANDOFF.json` alongside `.continue-here.md`. JSON provides machine-readable state (task position, blockers, human actions pending, uncommitted files) that `/gsd:resume-work` parses for precise resumption instead of generic "what do you want to do?" (#940)
 
 ## [1.25.0] - 2026-03-16
 
