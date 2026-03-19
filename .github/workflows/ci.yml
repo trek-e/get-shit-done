@@ -42,10 +42,10 @@ jobs:
           done
           echo "✅ All JSON files valid"
 
-      # Check for conflict markers
+      # Check for conflict markers (git merge artifacts)
       - name: Check for conflict markers
         run: |
-          if grep -rl '<<<<<<< \|>>>>>>> \|=======$' --include='*.js' --include='*.cjs' --include='*.md' --include='*.json' . 2>/dev/null | grep -v node_modules | grep -v .git; then
+          if grep -rnE '^<{7} |^>{7} |^={7}$' --include='*.js' --include='*.cjs' --include='*.md' --include='*.json' . 2>/dev/null | grep -v node_modules | grep -v .git; then
             echo "❌ Conflict markers found in tracked files"
             exit 1
           fi
