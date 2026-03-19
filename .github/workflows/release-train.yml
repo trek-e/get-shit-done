@@ -1,0 +1,243 @@
+name: Release Train
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - create-release-branch
+          - create-hotfix-branch
+          - promote-rc
+          - finalize-release
+      version:
+        description: 'Version (e.g., 1.27.0)'
+        required: true
+        type: string
+      base:
+        description: 'Base branch (default: main)'
+        required: false
+        type: string
+        default: main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  NODE_VERSION: 24
+
+jobs:
+  # ─── Create Release Branch ──────────────────────────────────────────────────
+  create-release:
+    runs-on: ubuntu-latest
+    if: inputs.action == 'create-release-branch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Create release branch
+        run: |
+          VERSION="${{ inputs.version }}"
+          BRANCH="release/${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+
+          # Bump version in package.json
+          node -e "
+            const pkg = require('./package.json');
+            pkg.version = '${VERSION}';
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+          # Update package-lock.json
+          npm install --package-lock-only
+
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${VERSION}"
+          git push origin "$BRANCH"
+
+          echo "✅ Created release branch: $BRANCH"
+          echo "Next: merge feature PRs into $BRANCH, then run 'promote-rc'"
+
+      - name: Create tracking PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ inputs.version }}';
+            const branch = `release/${version}`;
+
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Release v${version}`,
+              head: branch,
+              base: 'main',
+              body: [
+                `## Release v${version}`,
+                '',
+                '### Checklist',
+                '- [ ] All planned features merged',
+                '- [ ] RC published and tested (`npm install get-shit-done-cc@next`)',
+                '- [ ] CHANGELOG.md updated',
+                '- [ ] No critical bugs reported',
+                '- [ ] Ready for final release',
+                '',
+                '### Release candidates',
+                '_None yet — run "promote-rc" workflow to publish an RC._',
+                '',
+                `<sub>Created by release-train workflow</sub>`,
+              ].join('\n'),
+              draft: true,
+            });
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['type: chore'],
+            });
+
+  # ─── Create Hotfix Branch ──────────────────────────────────────────────────
+  create-hotfix:
+    runs-on: ubuntu-latest
+    if: inputs.action == 'create-hotfix-branch'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Create hotfix branch
+        run: |
+          VERSION="${{ inputs.version }}"
+          BRANCH="hotfix/${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+
+          # Bump to patch version
+          node -e "
+            const pkg = require('./package.json');
+            pkg.version = '${VERSION}';
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          npm install --package-lock-only
+
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${VERSION} (hotfix)"
+          git push origin "$BRANCH"
+
+          echo "✅ Created hotfix branch: $BRANCH"
+          echo "Cherry-pick or commit fixes, then run 'finalize-release'"
+
+  # ─── Promote to Release Candidate ──────────────────────────────────────────
+  promote-rc:
+    runs-on: ubuntu-latest
+    if: inputs.action == 'promote-rc'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/${{ inputs.version }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Determine RC number
+        id: rc
+        run: |
+          VERSION="${{ inputs.version }}"
+          # Find existing RC tags
+          RC_COUNT=$(git tag -l "v${VERSION}-rc.*" | wc -l | tr -d ' ')
+          NEXT_RC=$((RC_COUNT + 1))
+          RC_VERSION="${VERSION}-rc.${NEXT_RC}"
+          echo "rc_version=$RC_VERSION" >> "$GITHUB_OUTPUT"
+          echo "📦 RC version: $RC_VERSION"
+
+      - name: Tag and publish RC
+        run: |
+          RC_VERSION="${{ steps.rc.outputs.rc_version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Update package.json to RC version
+          node -e "
+            const pkg = require('./package.json');
+            pkg.version = '${RC_VERSION}';
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+          npm run build:hooks
+          git add -A
+          git commit -m "chore: bump to ${RC_VERSION}" || true
+          git tag -a "v${RC_VERSION}" -m "Release candidate v${RC_VERSION}"
+          git push origin "release/${{ inputs.version }}" --tags
+
+          echo "✅ Tagged v${RC_VERSION}"
+          echo "Install for testing: npx get-shit-done-cc@next"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ─── Finalize Release ──────────────────────────────────────────────────────
+  finalize-release:
+    runs-on: ubuntu-latest
+    if: inputs.action == 'finalize-release'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base == 'main' && format('release/{0}', inputs.version) || format('hotfix/{0}', inputs.version) }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm ci
+
+      - name: Run full test suite
+        run: npm run test:coverage
+
+      - name: Finalize version
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Ensure package.json has final version (not RC)
+          node -e "
+            const pkg = require('./package.json');
+            pkg.version = '${VERSION}';
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+          npm run build:hooks
+          git add -A
+          git commit -m "chore: finalize v${VERSION}" || true
+          git tag -a "v${VERSION}" -m "Release v${VERSION}"
+          git push origin HEAD --tags
+
+          echo "✅ Finalized v${VERSION}"
+          echo "The release workflow will now trigger from the tag push."
+          echo "Merge the release/hotfix branch PR to complete."

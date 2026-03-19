@@ -1,0 +1,101 @@
+name: Auto-Create Branch for Issues
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  create-branch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # Only trigger on specific labels that map to branch types
+    if: >-
+      contains(fromJSON('["bug", "enhancement", "priority: critical", "type: chore", "area: docs"]'),
+      github.event.label.name)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine branch type and create branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = context.payload.label.name;
+            const issue = context.payload.issue;
+            const number = issue.number;
+
+            // Generate slug from title (lowercase, alphanumeric + hyphens, max 40 chars)
+            const slug = issue.title
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '')
+              .substring(0, 40)
+              .replace(/-+$/, '');
+
+            // Map label to branch prefix
+            const prefixMap = {
+              'bug': 'fix',
+              'enhancement': 'feat',
+              'priority: critical': 'hotfix',
+              'type: chore': 'chore',
+              'area: docs': 'docs',
+            };
+
+            const prefix = prefixMap[label];
+            if (!prefix) return;
+
+            const branchName = `${prefix}/${number}-${slug}`;
+
+            // Check if branch already exists
+            try {
+              await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branchName}`,
+              });
+              console.log(`Branch ${branchName} already exists — skipping`);
+              return;
+            } catch (e) {
+              if (e.status !== 404) throw e;
+              // 404 = branch doesn't exist, proceed to create
+            }
+
+            // Get main branch SHA
+            const { data: mainRef } = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'heads/main',
+            });
+
+            // Create branch
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/heads/${branchName}`,
+              sha: mainRef.object.sha,
+            });
+
+            console.log(`✅ Created branch: ${branchName}`);
+
+            // Comment on issue with branch info
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: number,
+              body: [
+                `### 🌿 Branch created: \`${branchName}\``,
+                '',
+                'To start working on this issue:',
+                '```bash',
+                `git fetch origin ${branchName}`,
+                `git checkout ${branchName}`,
+                '```',
+                '',
+                `When ready, open a PR from \`${branchName}\` → \`main\`.`,
+                '',
+                `<sub>Auto-created from label: \`${label}\`</sub>`,
+              ].join('\n'),
+            });

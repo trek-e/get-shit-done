@@ -1,0 +1,36 @@
+name: Validate Branch Name
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  check-branch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Validate branch naming convention
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+
+            const validPrefixes = [
+              'feat/', 'fix/', 'hotfix/', 'docs/', 'chore/',
+              'refactor/', 'test/', 'release/', 'ci/', 'perf/', 'revert/',
+            ];
+
+            const alwaysValid = ['main', 'develop'];
+            if (alwaysValid.includes(branch)) return;
+            if (branch.startsWith('dependabot/') || branch.startsWith('renovate/')) return;
+
+            const isValid = validPrefixes.some(prefix => branch.startsWith(prefix));
+            if (!isValid) {
+              const prefixList = validPrefixes.map(p => `\`${p}\``).join(', ');
+              core.warning(
+                `Branch \`${branch}\` doesn't follow naming convention.\n` +
+                `Expected prefixes: ${prefixList}\n` +
+                `Example: \`feat/123-add-review-command\` or \`fix/456-hook-filter\`\n\n` +
+                `See VERSIONING.md for the full branching strategy.`
+              );
+            }
