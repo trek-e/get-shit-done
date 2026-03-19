@@ -1,0 +1,234 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.27.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run — validate without publishing'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  NODE_VERSION: 24
+
+jobs:
+  # ─── Validate Release ──────────────────────────────────────────────────────
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog generation
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # Extract and validate version
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # Check if prerelease (contains - like 1.27.0-beta.1)
+          if [[ "$VERSION" == *-* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "📦 Version: $VERSION"
+
+      # Verify version matches package.json
+      - name: Verify version consistency
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "❌ Version mismatch: package.json=$PKG_VERSION, tag=$TAG_VERSION"
+            echo "   Update package.json version before tagging."
+            exit 1
+          fi
+          echo "✅ Version consistent: $PKG_VERSION"
+
+      # Verify CHANGELOG has entry for this version
+      - name: Verify changelog entry
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! grep -q "\[$VERSION\]" CHANGELOG.md; then
+            echo "⚠️ No CHANGELOG.md entry for v$VERSION"
+            echo "   Add a changelog entry before releasing."
+          else
+            echo "✅ CHANGELOG.md has entry for v$VERSION"
+          fi
+
+      # Run full test suite
+      - name: Run tests
+        run: npm run test:coverage
+
+      # Validate hooks build
+      - name: Build hooks
+        run: npm run build:hooks
+
+      # Verify dist hooks match source
+      - name: Verify hook integrity
+        run: |
+          for hook in hooks/gsd-*.js; do
+            base=$(basename "$hook")
+            dist="hooks/dist/$base"
+            if [ ! -f "$dist" ]; then
+              echo "❌ Missing dist hook: $dist"
+              exit 1
+            fi
+            if ! diff -q "$hook" "$dist" > /dev/null 2>&1; then
+              echo "❌ Hook mismatch: $base (source != dist)"
+              echo "   Run 'npm run build:hooks' and commit."
+              exit 1
+            fi
+          done
+          echo "✅ All hooks match between source and dist"
+
+  # ─── Publish to npm ─────────────────────────────────────────────────────────
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: validate
+    if: ${{ !inputs.dry_run }}
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build hooks for distribution
+        run: npm run build:hooks
+
+      # Publish to npm
+      - name: Publish to npm
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          IS_PRE="${{ needs.validate.outputs.is_prerelease }}"
+
+          if [ "$IS_PRE" = "true" ]; then
+            npm publish --tag next --access public
+            echo "📦 Published v$VERSION to npm (next tag)"
+          else
+            npm publish --access public
+            echo "📦 Published v$VERSION to npm (latest tag)"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ─── Create GitHub Release ──────────────────────────────────────────────────
+  github-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [validate, publish]
+    if: ${{ !inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          # Extract section between this version header and the next
+          NOTES=$(awk "/^## \[$VERSION\]/,/^## \[/" CHANGELOG.md | head -n -1 | tail -n +2)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release v$VERSION — see CHANGELOG.md for details."
+          fi
+          # Write to file for multiline support
+          echo "$NOTES" > /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.validate.outputs.version }}
+          name: v${{ needs.validate.outputs.version }}
+          body_path: /tmp/release-notes.md
+          prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ─── Post-Release Verification ──────────────────────────────────────────────
+  verify-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [validate, publish]
+    if: ${{ !inputs.dry_run }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Wait for npm propagation
+      - name: Wait for npm propagation
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          echo "Waiting for v$VERSION to appear on npm..."
+          for i in $(seq 1 30); do
+            PUBLISHED=$(npm view get-shit-done-cc@$VERSION version 2>/dev/null || echo "")
+            if [ "$PUBLISHED" = "$VERSION" ]; then
+              echo "✅ v$VERSION is live on npm"
+              exit 0
+            fi
+            echo "  Attempt $i/30 — not yet available, waiting 10s..."
+            sleep 10
+          done
+          echo "⚠️ v$VERSION not found on npm after 5 minutes"
+          exit 1
+
+      # Smoke test the published package
+      - name: Smoke test published package
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          mkdir /tmp/gsd-smoke && cd /tmp/gsd-smoke
+          npm init -y > /dev/null
+
+          # Install published version
+          npm install get-shit-done-cc@$VERSION
+
+          # Verify install works
+          npx get-shit-done-cc --claude --local
+          test -d .claude/commands/gsd || { echo "❌ Install failed"; exit 1; }
+
+          VERSION_FILE=$(cat .claude/get-shit-done/VERSION)
+          if [ "$VERSION_FILE" != "$VERSION" ]; then
+            echo "❌ VERSION file mismatch: expected $VERSION, got $VERSION_FILE"
+            exit 1
+          fi
+
+          echo "✅ Published package installs correctly"

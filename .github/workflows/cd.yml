@@ -1,0 +1,54 @@
+name: CD — Auto-Release on Version Bump
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+
+jobs:
+  check-version-bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      new_version: ${{ steps.check.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Need previous commit to compare
+
+      - name: Check for version bump
+        id: check
+        run: |
+          # Get version from current and previous commit
+          CURRENT=$(node -p "require('./package.json').version")
+          PREVIOUS=$(git show HEAD~1:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+
+          if [ -z "$PREVIOUS" ] || [ "$CURRENT" = "$PREVIOUS" ]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "📋 No version change: $CURRENT"
+          else
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "new_version=$CURRENT" >> "$GITHUB_OUTPUT"
+            echo "📦 Version bump detected: $PREVIOUS → $CURRENT"
+          fi
+
+  auto-tag-and-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: check-version-bump
+    if: needs.check-version-bump.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create and push tag
+        run: |
+          VERSION="v${{ needs.check-version-bump.outputs.new_version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+          echo "🏷️ Tagged $VERSION — release workflow will trigger"

@@ -1,0 +1,122 @@
+name: PR Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-gate-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── PR Size & Scope Check ─────────────────────────────────────────────────
+  pr-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Analyze PR scope
+        id: scope
+        run: |
+          # Count changed files
+          FILES_CHANGED=$(git diff --name-only origin/main...HEAD | wc -l)
+          LINES_ADDED=$(git diff --stat origin/main...HEAD | tail -1 | awk '{print $4}' || echo 0)
+          LINES_REMOVED=$(git diff --stat origin/main...HEAD | tail -1 | awk '{print $6}' || echo 0)
+
+          echo "files=$FILES_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "added=$LINES_ADDED" >> "$GITHUB_OUTPUT"
+          echo "removed=$LINES_REMOVED" >> "$GITHUB_OUTPUT"
+
+          # Flag large PRs
+          if [ "$FILES_CHANGED" -gt 30 ]; then
+            echo "size=XL" >> "$GITHUB_OUTPUT"
+          elif [ "$FILES_CHANGED" -gt 15 ]; then
+            echo "size=L" >> "$GITHUB_OUTPUT"
+          elif [ "$FILES_CHANGED" -gt 5 ]; then
+            echo "size=M" >> "$GITHUB_OUTPUT"
+          else
+            echo "size=S" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment PR metrics
+        if: github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const size = '${{ steps.scope.outputs.size }}';
+            const files = '${{ steps.scope.outputs.files }}';
+            const added = '${{ steps.scope.outputs.added }}';
+            const removed = '${{ steps.scope.outputs.removed }}';
+
+            const emoji = { S: '🟢', M: '🟡', L: '🟠', XL: '🔴' };
+            const body = `### PR Metrics ${emoji[size] || '⚪'}
+
+            | Metric | Value |
+            |--------|-------|
+            | Size | **${size}** |
+            | Files changed | ${files} |
+            | Lines added | +${added} |
+            | Lines removed | -${removed} |
+
+            ${size === 'XL' ? '⚠️ **Large PR** — consider splitting into smaller, focused PRs for easier review.' : ''}
+            ${size === 'L' ? '📋 **Medium-large PR** — ensure the PR description covers all changes.' : ''}`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.split('\n').map(l => l.trim()).join('\n')
+            });
+
+  # ─── Installer Integrity ───────────────────────────────────────────────────
+  installer-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Verify all commands have corresponding workflows
+      - name: Validate command-workflow mapping
+        run: |
+          MISSING=0
+          for cmd in commands/gsd/*.md; do
+            base=$(basename "$cmd" .md)
+            # Check if workflow reference exists in the command file
+            if grep -q '@~/.claude/get-shit-done/workflows/' "$cmd"; then
+              workflow=$(grep -o 'workflows/[^"]*\.md' "$cmd" | head -1)
+              wf_path="get-shit-done/$workflow"
+              if [ ! -f "$wf_path" ]; then
+                echo "❌ Command $base references missing workflow: $wf_path"
+                MISSING=$((MISSING + 1))
+              fi
+            fi
+          done
+          if [ "$MISSING" -gt 0 ]; then
+            echo "❌ $MISSING commands reference missing workflows"
+            exit 1
+          fi
+          echo "✅ All command-workflow mappings valid"
+
+      # Verify agent files are well-formed
+      - name: Validate agent frontmatter
+        run: |
+          for agent in agents/gsd-*.md; do
+            if ! head -1 "$agent" | grep -q '^---'; then
+              echo "❌ Missing frontmatter: $agent"
+              exit 1
+            fi
+          done
+          echo "✅ All agent files have frontmatter"

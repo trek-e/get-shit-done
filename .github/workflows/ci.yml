@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Lint & Validate ────────────────────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Validate hook syntax (catches duplicate const, missing brackets, etc.)
+      - name: Validate hook syntax
+        run: |
+          for hook in hooks/gsd-*.js; do
+            node --check "$hook" || { echo "❌ Syntax error in $hook"; exit 1; }
+          done
+          echo "✅ All hooks pass syntax check"
+
+      # Validate JSON files
+      - name: Validate JSON files
+        run: |
+          for f in package.json get-shit-done/templates/config.json; do
+            node -e "JSON.parse(require('fs').readFileSync('$f', 'utf8'))" || { echo "❌ Invalid JSON: $f"; exit 1; }
+          done
+          echo "✅ All JSON files valid"
+
+      # Check for conflict markers
+      - name: Check for conflict markers
+        run: |
+          if grep -rl '<<<<<<< \|>>>>>>> \|=======$' --include='*.js' --include='*.cjs' --include='*.md' --include='*.json' . 2>/dev/null | grep -v node_modules | grep -v .git; then
+            echo "❌ Conflict markers found in tracked files"
+            exit 1
+          fi
+          echo "✅ No conflict markers"
+
+  # ─── Test Matrix ────────────────────────────────────────────────────────────
+  test:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    needs: lint
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20, 22, 24]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run tests with coverage
+        shell: bash
+        run: npm run test:coverage
+
+      - name: Upload coverage (Node 24, Ubuntu only)
+        if: matrix.node-version == 24 && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  # ─── Security Scan ──────────────────────────────────────────────────────────
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Check for known vulnerabilities in dependencies
+      - name: Audit dependencies
+        run: npm audit --omit=dev --audit-level=high || true
+
+      # Scan for hardcoded secrets
+      - name: Scan for secrets
+        run: |
+          PATTERNS='(sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36}|gho_[a-zA-Z0-9]{36}|AKIA[A-Z0-9]{16}|-----BEGIN.*PRIVATE KEY)'
+          if grep -rE "$PATTERNS" --include='*.js' --include='*.cjs' --include='*.md' --include='*.json' . 2>/dev/null | grep -v node_modules | grep -v .git | grep -v 'test' | grep -v 'example' | grep -v 'pattern'; then
+            echo "⚠️ Potential secrets detected — review above matches"
+          else
+            echo "✅ No hardcoded secrets found"
+          fi
+
+  # ─── Install Smoke Test ─────────────────────────────────────────────────────
+  install-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Test Claude Code install
+      - name: Smoke test — Claude Code install
+        run: |
+          node bin/install.js --claude --local
+          test -d .claude/commands/gsd || { echo "❌ Commands not installed"; exit 1; }
+          test -d .claude/get-shit-done || { echo "❌ Workflows not installed"; exit 1; }
+          test -d .claude/agents || { echo "❌ Agents not installed"; exit 1; }
+          test -f .claude/get-shit-done/VERSION || { echo "❌ VERSION file missing"; exit 1; }
+          echo "✅ Claude Code install smoke test passed"
+
+      # Test Codex install
+      - name: Smoke test — Codex install
+        run: |
+          node bin/install.js --codex --local
+          test -d .codex/skills || { echo "❌ Skills not installed"; exit 1; }
+          test -f .codex/config.toml || { echo "❌ config.toml not created"; exit 1; }
+          echo "✅ Codex install smoke test passed"
+
+      # Test Copilot install
+      - name: Smoke test — Copilot install
+        run: |
+          node bin/install.js --copilot --local
+          test -d .github/skills || { echo "❌ Skills not installed"; exit 1; }
+          echo "✅ Copilot install smoke test passed"
