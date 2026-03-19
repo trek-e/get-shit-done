@@ -86,9 +86,15 @@ jobs:
             echo "✅ CHANGELOG.md has entry for v$VERSION"
           fi
 
-      # Run full test suite
+      # Run full test suite including integration tests
       - name: Run tests
         run: npm run test:coverage
+
+      # Run integration tests explicitly (E2E lifecycle, git ops, install smoke)
+      - name: Run integration test harness
+        run: |
+          node --test tests/integration.test.cjs
+          echo "✅ Integration test harness passed"
 
       # Validate hooks build
       - name: Build hooks
@@ -113,12 +119,17 @@ jobs:
           echo "✅ All hooks match between source and dist"
 
   # ─── Publish to npm ─────────────────────────────────────────────────────────
+  # REQUIRES HUMAN APPROVAL — the npm-publish environment must have
+  # "Required reviewers" configured in GitHub Settings > Environments.
+  # This ensures no release ships without a human reviewing the validation output.
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: validate
     if: ${{ !inputs.dry_run }}
-    environment: npm-publish
+    environment:
+      name: npm-publish
+      url: https://www.npmjs.com/package/get-shit-done-cc
     steps:
       - uses: actions/checkout@v4
 

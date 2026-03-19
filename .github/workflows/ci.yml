@@ -76,6 +76,14 @@ jobs:
         shell: bash
         run: npm run test:coverage
 
+      # Integration tests run on Node 24 only (full lifecycle, git ops, installs)
+      - name: Run integration test harness
+        if: matrix.node-version == 24
+        shell: bash
+        run: |
+          node --test tests/integration.test.cjs
+          echo "✅ Integration harness passed"
+
       - name: Upload coverage (Node 24, Ubuntu only)
         if: matrix.node-version == 24 && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
