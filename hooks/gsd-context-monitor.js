@@ -21,6 +21,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawn } = require('child_process');
 
 const WARNING_THRESHOLD = 35;  // remaining_percentage <= 35%
 const CRITICAL_THRESHOLD = 25; // remaining_percentage <= 25%
@@ -130,16 +131,27 @@ process.stdin.on('end', () => {
 
     // On CRITICAL with active GSD project, auto-record session state as a
     // breadcrumb for /gsd-resume-work (#1974). Fire-and-forget subprocess —
-    // doesn't block the hook or the agent.
-    if (isCritical && isGsdActive) {
+    // doesn't block the hook or the agent. Fires ONCE per CRITICAL session,
+    // guarded by warnData.criticalRecorded to prevent repeated overwrites
+    // of the "crash moment" record on every debounce cycle.
+    if (isCritical && isGsdActive && !warnData.criticalRecorded) {
       try {
-        const gsdTools = path.join(process.env.HOME || '', '.claude', 'get-shit-done', 'bin', 'gsd-tools.cjs');
-        const timestamp = new Date().toISOString().split('T')[0];
-        require('child_process').spawn(
+        // Runtime-agnostic path: this hook lives at <runtime-config>/hooks/
+        // and gsd-tools.cjs lives at <runtime-config>/get-shit-done/bin/.
+        // Using __dirname makes this work on Claude Code, OpenCode, Gemini,
+        // Kilo, etc. without hardcoding ~/.claude/.
+        const gsdTools = path.join(__dirname, '..', 'get-shit-done', 'bin', 'gsd-tools.cjs');
+        // Coerce usedPct to a safe number in case bridge file is malformed
+        const safeUsedPct = Number(usedPct) || 0;
+        const stoppedAt = `context exhaustion at ${safeUsedPct}% (${new Date().toISOString().split('T')[0]})`;
+        spawn(
           process.execPath,
-          [gsdTools, 'state', 'update', 'Stopped At', `context exhaustion at ${usedPct}% (${timestamp})`],
+          [gsdTools, 'state', 'record-session', '--stopped-at', stoppedAt],
           { cwd, detached: true, stdio: 'ignore' }
         ).unref();
+        warnData.criticalRecorded = true;
+        // Persist the sentinel so subsequent debounce cycles don't re-fire
+        fs.writeFileSync(warnPath, JSON.stringify(warnData));
       } catch { /* non-critical — don't let state recording break the hook */ }
     }
 
