@@ -37,7 +37,7 @@ import { sanitizePrompt } from './prompt-sanitizer.js';
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const GSD_TEMPLATES_DIR = join(homedir(), '.claude', 'get-shit-done', 'templates');
-const GSD_AGENTS_DIR = join(homedir(), '.claude', 'agents');
+const GSD_AGENTS_DIR = process.env.GSD_AGENTS_DIR || join(homedir(), '.claude', 'agents');
 
 const RESEARCH_TYPES = ['STACK', 'FEATURES', 'ARCHITECTURE', 'PITFALLS'] as const;
 type ResearchType = (typeof RESEARCH_TYPES)[number];
