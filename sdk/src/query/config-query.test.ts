@@ -58,6 +58,43 @@ describe('configGet', () => {
     await expect(configGet(['nonexistent.key'], tmpDir)).rejects.toThrow(GSDError);
   });
 
+  it('throws GSDError with Execution classification for missing key (exit code 1 not 10)', async () => {
+    // Regression for #2544: missing key must exit 1, not 10 (Validation).
+    // Callers like `gsd-sdk query config-get k || default` rely on non-zero exit.
+    // ErrorClassification.Execution maps to exit code 1 (matches git config --get).
+    const { configGet } = await import('./config-query.js');
+    const { ErrorClassification } = await import('../errors.js');
+    await writeFile(
+      join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ model_profile: 'quality' }),
+    );
+    let thrown: unknown;
+    try {
+      await configGet(['nonexistent.key'], tmpDir);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(GSDError);
+    expect((thrown as GSDError).classification).toBe(ErrorClassification.Execution);
+  });
+
+  it('throws GSDError with Execution classification when traversal hits non-object', async () => {
+    const { configGet } = await import('./config-query.js');
+    const { ErrorClassification } = await import('../errors.js');
+    await writeFile(
+      join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ workflow: 'a-string-not-an-object' }),
+    );
+    let thrown: unknown;
+    try {
+      await configGet(['workflow.auto_advance'], tmpDir);
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(GSDError);
+    expect((thrown as GSDError).classification).toBe(ErrorClassification.Execution);
+  });
+
   it('reads raw config without merging defaults', async () => {
     const { configGet } = await import('./config-query.js');
     // Write config with only model_profile -- no workflow section

@@ -90,12 +90,12 @@ export const configGet: QueryHandler = async (args, projectDir) => {
   let current: unknown = config;
   for (const key of keys) {
     if (current === undefined || current === null || typeof current !== 'object') {
-      throw new GSDError(`Key not found: ${keyPath}`, ErrorClassification.Validation);
+      throw new GSDError(`Key not found: ${keyPath}`, ErrorClassification.Execution);
     }
     current = (current as Record<string, unknown>)[key];
   }
   if (current === undefined) {
-    throw new GSDError(`Key not found: ${keyPath}`, ErrorClassification.Validation);
+    throw new GSDError(`Key not found: ${keyPath}`, ErrorClassification.Execution);
   }
 
   return { data: current };
