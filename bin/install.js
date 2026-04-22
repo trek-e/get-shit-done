@@ -876,14 +876,15 @@ function convertCopilotToolName(claudeTool) {
  */
 function convertClaudeToCopilotContent(content, isGlobal = false) {
   let c = content;
-  // CONV-06: Path replacement — most specific first to avoid substring matches
+  // CONV-06: Path replacement — most specific first to avoid substring matches.
+  // Use \b (word boundary) so ~/.claude without a trailing slash is also replaced
+  // (e.g. "configDir = ~/.claude" or "~/.claude,") — fixes #2545.
   if (isGlobal) {
-    c = c.replace(/\$HOME\/\.claude\//g, '$HOME/.copilot/');
-    c = c.replace(/~\/\.claude\//g, '~/.copilot/');
+    c = c.replace(/\$HOME\/\.claude\b/g, '$HOME/.copilot');
+    c = c.replace(/~\/\.claude\b/g, '~/.copilot');
   } else {
-    c = c.replace(/\$HOME\/\.claude\//g, '.github/');
-    c = c.replace(/~\/\.claude\//g, '.github/');
-    c = c.replace(/~\/\.claude\n/g, '.github/');
+    c = c.replace(/\$HOME\/\.claude\b/g, '.github');
+    c = c.replace(/~\/\.claude\b/g, '.github');
   }
   c = c.replace(/\.\/\.claude\//g, './.github/');
   c = c.replace(/\.claude\//g, '.github/');
@@ -1003,12 +1004,13 @@ function convertClaudeAgentToCopilotAgent(content, isGlobal = false) {
  */
 function convertClaudeToAntigravityContent(content, isGlobal = false) {
   let c = content;
+  // Use \b so ~/.claude without a trailing slash is also replaced (same fix as #2545).
   if (isGlobal) {
-    c = c.replace(/\$HOME\/\.claude\//g, '$HOME/.gemini/antigravity/');
-    c = c.replace(/~\/\.claude\//g, '~/.gemini/antigravity/');
+    c = c.replace(/\$HOME\/\.claude\b/g, '$HOME/.gemini/antigravity');
+    c = c.replace(/~\/\.claude\b/g, '~/.gemini/antigravity');
   } else {
-    c = c.replace(/\$HOME\/\.claude\//g, '.agent/');
-    c = c.replace(/~\/\.claude\//g, '.agent/');
+    c = c.replace(/\$HOME\/\.claude\b/g, '.agent');
+    c = c.replace(/~\/\.claude\b/g, '.agent');
   }
   c = c.replace(/\.\/\.claude\//g, './.agent/');
   c = c.replace(/\.claude\//g, '.agent/');

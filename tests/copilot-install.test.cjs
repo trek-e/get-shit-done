@@ -342,6 +342,49 @@ describe('convertClaudeToCopilotContent', () => {
       'hello world'
     );
   });
+
+  // ─── Bug #2545: ~/.claude without trailing slash must also be replaced ──────
+  test('replaces ~/.claude at end-of-line (no trailing slash) in local mode (#2545)', () => {
+    assert.strictEqual(
+      convertClaudeToCopilotContent('configDir = ~/.claude\nnext line'),
+      'configDir = .github\nnext line'
+    );
+  });
+
+  test('replaces ~/.claude at end-of-line in global mode (#2545)', () => {
+    assert.strictEqual(
+      convertClaudeToCopilotContent('configDir = ~/.claude\nnext line', true),
+      'configDir = ~/.copilot\nnext line'
+    );
+  });
+
+  test('replaces ~/.claude followed by comma in local mode (#2545)', () => {
+    assert.strictEqual(
+      convertClaudeToCopilotContent('global: ~/.claude, or ~/.config/opencode/'),
+      'global: .github, or ~/.config/opencode/'
+    );
+  });
+
+  test('replaces ~/.claude followed by comma in global mode (#2545)', () => {
+    assert.strictEqual(
+      convertClaudeToCopilotContent('global: ~/.claude, or ~/.config/opencode/', true),
+      'global: ~/.copilot, or ~/.config/opencode/'
+    );
+  });
+
+  test('replaces $HOME/.claude without trailing slash in local mode (#2545)', () => {
+    assert.strictEqual(
+      convertClaudeToCopilotContent('dir=$HOME/.claude\n'),
+      'dir=.github\n'
+    );
+  });
+
+  test('replaces $HOME/.claude without trailing slash in global mode (#2545)', () => {
+    assert.strictEqual(
+      convertClaudeToCopilotContent('dir=$HOME/.claude\n', true),
+      'dir=$HOME/.copilot\n'
+    );
+  });
 });
 
 // ─── convertClaudeCommandToCopilotSkill ─────────────────────────────────────────
