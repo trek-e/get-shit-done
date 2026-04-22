@@ -215,6 +215,20 @@ Every task has four required fields:
 
 **Nyquist Rule:** Every `<verify>` must include an `<automated>` command. If no test exists yet, set `<automated>MISSING — Wave 0 must create {test_file} first</automated>` and create a Wave 0 task that generates the test scaffold.
 
+**Grep gate hygiene:** Avoid the self-invalidating grep gate anti-pattern where a bare zero-count grep gate counts occurrences across the whole file including comment lines. A comment like `# This function no longer calls deprecated_fn` makes `grep -c deprecated_fn file == 0` fail even when the code itself is clean. Always strip comment lines before counting:
+
+```bash
+# Bad — counts comment text, self-invalidating
+grep -c 'deprecated_fn' src/service.ts == 0
+
+# Good — strip comment lines first, then count
+grep -v '^\s*#\|^\s*//' src/service.ts | grep -c 'deprecated_fn'
+# or for shell scripts:
+grep -v '^\s*#' script.sh | grep -c 'old_pattern'
+```
+
+Zero-count gates (`== 0`) are especially prone to this: one comment mentioning the banned pattern breaks the gate permanently.
+
 **<done>:** Acceptance criteria - measurable state of completion.
 - Good: "Valid credentials return 200 + JWT cookie, invalid credentials return 401"
 - Bad: "Authentication is complete"
