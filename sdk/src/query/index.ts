@@ -47,7 +47,7 @@ import {
   initIngestDocs,
 } from './init.js';
 import { initNewProject, initProgress, initManager } from './init-complex.js';
-import { agentSkills } from './skills.js';
+import { agentSkills, listSkills } from './skills.js';
 import { roadmapUpdatePlanProgress, requirementsMarkComplete } from './roadmap.js';
 import { statePlannedPhase } from './state-mutation.js';
 import { verifySchemaDrift } from './verify.js';
@@ -366,6 +366,7 @@ export function createRegistry(eventStream?: GSDEventStream): QueryRegistry {
 
   // Domain-specific handlers (fully implemented)
   registry.register('agent-skills', agentSkills);
+  registry.register('list-skills', listSkills);
   registry.register('roadmap.update-plan-progress', roadmapUpdatePlanProgress);
   registry.register('roadmap update-plan-progress', roadmapUpdatePlanProgress);
   registry.register('requirements.mark-complete', requirementsMarkComplete);
