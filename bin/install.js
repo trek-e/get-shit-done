@@ -2066,7 +2066,10 @@ function generateCodexConfigBlock(agents, targetDir) {
   ];
 
   for (const { name, description } of agents) {
-    lines.push(`[agents.${name}]`);
+    // #2645 — Codex schema requires [[agents]] array-of-tables, not [agents.<name>] maps.
+    // Emitting [agents.<name>] produces `invalid type: map, expected a sequence` on load.
+    lines.push(`[[agents]]`);
+    lines.push(`name = ${JSON.stringify(name)}`);
     lines.push(`description = ${JSON.stringify(description)}`);
     lines.push(`config_file = "${agentsPrefix}/${name}.toml"`);
     lines.push('');
@@ -2075,8 +2078,39 @@ function generateCodexConfigBlock(agents, targetDir) {
   return lines.join('\n');
 }
 
+/**
+ * Strip any managed GSD agent sections from a TOML string.
+ *
+ * Handles BOTH shapes so reinstall self-heals broken legacy configs:
+ *   - Legacy: `[agents.gsd-*]` single-keyed map tables (pre-#2645).
+ *   - Current: `[[agents]]` array-of-tables whose `name = "gsd-*"`.
+ *
+ * A section runs from its header to the next `[` header or EOF.
+ */
 function stripCodexGsdAgentSections(content) {
-  return content.replace(/^\[agents\.gsd-[^\]]+\]\n(?:(?!\[)[^\n]*\n?)*/gm, '');
+  // Use the TOML-aware section parser so we never absorb adjacent user-authored
+  // tables — even if their headers are indented or otherwise oddly placed.
+  const sections = getTomlTableSections(content).filter((section) => {
+    // Legacy `[agents.gsd-<name>]` map tables (pre-#2645).
+    if (!section.array && /^agents\.gsd-/.test(section.path)) {
+      return true;
+    }
+
+    // Current `[[agents]]` array-of-tables — only strip blocks whose
+    // `name = "gsd-..."`, preserving user-authored [[agents]] entries.
+    if (section.array && section.path === 'agents') {
+      const body = content.slice(section.headerEnd, section.end);
+      const nameMatch = body.match(/^[ \t]*name[ \t]*=[ \t]*["']([^"']+)["']/m);
+      return Boolean(nameMatch && /^gsd-/.test(nameMatch[1]));
+    }
+
+    return false;
+  });
+
+  return removeContentRanges(
+    content,
+    sections.map(({ start, end }) => ({ start, end })),
+  );
 }
 
 /**
@@ -2774,13 +2808,27 @@ function isLegacyGsdAgentsSection(body) {
 
 function stripLeakedGsdCodexSections(content) {
   const leakedSections = getTomlTableSections(content)
-    .filter((section) =>
-      section.path.startsWith('agents.gsd-') ||
-      (
+    .filter((section) => {
+      // Legacy [agents.gsd-<name>] map tables (pre-#2645).
+      if (!section.array && section.path.startsWith('agents.gsd-')) return true;
+
+      // Legacy bare [agents] table with only the old max_threads/max_depth keys.
+      if (
+        !section.array &&
         section.path === 'agents' &&
         isLegacyGsdAgentsSection(content.slice(section.headerEnd, section.end))
-      )
-    );
+      ) return true;
+
+      // Current [[agents]] array-of-tables whose name is gsd-*. Preserve
+      // user-authored [[agents]] entries (other names) untouched.
+      if (section.array && section.path === 'agents') {
+        const body = content.slice(section.headerEnd, section.end);
+        const nameMatch = body.match(/^[ \t]*name[ \t]*=[ \t]*["']([^"']+)["']/m);
+        if (nameMatch && /^gsd-/.test(nameMatch[1])) return true;
+      }
+
+      return false;
+    });
 
   if (leakedSections.length === 0) {
     return content;
