@@ -200,6 +200,116 @@ describe('loadConfig', () => {
   });
 });
 
+// ─── loadConfig workstream config inheritance (#2714) ─────────────────────────
+
+describe('loadConfig workstream config inheritance (#2714)', () => {
+  let tmpDir;
+  let savedProject, savedWorkstream;
+
+  beforeEach(() => {
+    tmpDir = createTempProject();
+    savedProject = process.env.GSD_PROJECT;
+    savedWorkstream = process.env.GSD_WORKSTREAM;
+    delete process.env.GSD_PROJECT;
+    delete process.env.GSD_WORKSTREAM;
+  });
+
+  afterEach(() => {
+    if (savedProject !== undefined) process.env.GSD_PROJECT = savedProject;
+    else delete process.env.GSD_PROJECT;
+    if (savedWorkstream !== undefined) process.env.GSD_WORKSTREAM = savedWorkstream;
+    else delete process.env.GSD_WORKSTREAM;
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test('workstream config inherits keys missing from workstream config', () => {
+    // Root config sets model_profile; workstream config omits it.
+    // Workstream should inherit root's model_profile.
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ model_profile: 'quality' })
+    );
+    const wsDir = path.join(tmpDir, '.planning', 'workstreams', 'alice');
+    fs.mkdirSync(wsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(wsDir, 'config.json'),
+      JSON.stringify({ brave_search: true })
+    );
+    process.env.GSD_WORKSTREAM = 'alice';
+    const config = loadConfig(tmpDir);
+    assert.strictEqual(config.model_profile, 'quality', 'should inherit model_profile from root');
+    assert.strictEqual(config.brave_search, true, 'should keep workstream-specific key');
+  });
+
+  test('workstream config wins on key conflict with root', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ model_profile: 'quality' })
+    );
+    const wsDir = path.join(tmpDir, '.planning', 'workstreams', 'bob');
+    fs.mkdirSync(wsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(wsDir, 'config.json'),
+      JSON.stringify({ model_profile: 'fast' })
+    );
+    process.env.GSD_WORKSTREAM = 'bob';
+    const config = loadConfig(tmpDir);
+    assert.strictEqual(config.model_profile, 'fast', 'workstream override must win over root');
+  });
+
+  test('workstream null value clears root-inherited value (falls back to system default)', () => {
+    // Bug 1 (#2714): null in workstream config must win over root, not be ignored.
+    // workstream sets context_window: null to clear the root-inherited 80000.
+    // The merge should produce null, which loadConfig's `??` converts to the
+    // system default (200000) — NOT the root-inherited value (80000).
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ context_window: 80000, model_profile: 'quality' })
+    );
+    const wsDir = path.join(tmpDir, '.planning', 'workstreams', 'charlie');
+    fs.mkdirSync(wsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(wsDir, 'config.json'),
+      JSON.stringify({ context_window: null })
+    );
+    process.env.GSD_WORKSTREAM = 'charlie';
+    const config = loadConfig(tmpDir);
+    // Root's 80000 must NOT bleed through — null in workstream clears it
+    assert.notStrictEqual(config.context_window, 80000, 'root context_window must not bleed through when workstream sets null');
+    // loadConfig applies `null ?? systemDefault`, so system default (200000) is used
+    assert.strictEqual(config.context_window, 200000, 'null workstream override should resolve to system default, not root value');
+  });
+
+  test('workstream config inheritance respects GSD_PROJECT scope (not bare .planning root)', () => {
+    // Bug 2 (#2714): with GSD_PROJECT set, rootConfigPath must be
+    // .planning/{project}/config.json, not .planning/config.json.
+    // Write a WRONG root-level config (should NOT be read):
+    fs.writeFileSync(
+      path.join(tmpDir, '.planning', 'config.json'),
+      JSON.stringify({ model_profile: 'fast' }) // wrong project — must not bleed in
+    );
+    // Write the CORRECT project-scoped root config:
+    const projectDir = path.join(tmpDir, '.planning', 'myapp');
+    fs.mkdirSync(projectDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(projectDir, 'config.json'),
+      JSON.stringify({ model_profile: 'quality' })
+    );
+    // Workstream config under the project scope:
+    const wsDir = path.join(tmpDir, '.planning', 'myapp', 'workstreams', 'dana');
+    fs.mkdirSync(wsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(wsDir, 'config.json'),
+      JSON.stringify({ brave_search: true })
+    );
+    process.env.GSD_PROJECT = 'myapp';
+    process.env.GSD_WORKSTREAM = 'dana';
+    const config = loadConfig(tmpDir);
+    assert.strictEqual(config.model_profile, 'quality', 'must inherit from project-scoped root, not bare .planning root');
+    assert.strictEqual(config.brave_search, true, 'workstream-specific key must still apply');
+  });
+});
+
 // ─── loadConfig commit_docs gitignore auto-detection (#1250) ──────────────────
 
 describe('loadConfig commit_docs gitignore auto-detection (#1250)', () => {

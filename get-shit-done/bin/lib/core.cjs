@@ -278,7 +278,8 @@ const CONFIG_DEFAULTS = {
  * workstream config when GSD_WORKSTREAM is set (#2714).
  */
 function _deepMergeConfig(base, overlay) {
-  if (overlay === null || overlay === undefined) return base;
+  if (overlay === undefined) return base;
+  if (overlay === null) return null;
   if (base === null || base === undefined) return overlay;
   if (typeof base !== 'object' || typeof overlay !== 'object') return overlay;
   if (Array.isArray(base) || Array.isArray(overlay)) return overlay;
@@ -291,7 +292,7 @@ function _deepMergeConfig(base, overlay) {
 
 function loadConfig(cwd) {
   const configPath = path.join(planningDir(cwd), 'config.json');
-  const rootConfigPath = path.join(planningRoot(cwd), 'config.json');
+  const rootConfigPath = path.join(planningDir(cwd, null), 'config.json');
   const defaults = CONFIG_DEFAULTS;
 
   // Inherit-from-root (#2714): when GSD_WORKSTREAM is active, read the root
