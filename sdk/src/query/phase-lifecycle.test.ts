@@ -226,6 +226,44 @@ describe('replaceInCurrentMilestone', () => {
     // v1.18 old plans line should remain untouched
     expect(result).toContain('**Plans:** 1/1 plans');
   });
+
+  it('replaces inside active <details> even when footer text exists after </details>', async () => {
+    const { replaceInCurrentMilestone } = await import('./phase-lifecycle.js');
+    // Scenario: active milestone is the last <details> block, but a footer
+    // (e.g. "---\n*Last updated*") follows it. The fast-path sees after.trim()
+    // non-empty and replaces in the footer instead of inside the active block.
+    const content = [
+      '# Roadmap',
+      '',
+      '<details>',
+      '<summary>v1.0 (Archived)</summary>',
+      '',
+      '**Plans:** 1/1 plans',
+      '',
+      '</details>',
+      '',
+      '<details>',
+      '<summary>v2.0 (Active)</summary>',
+      '',
+      '**Plans:** 1/2 plans',
+      '',
+      '</details>',
+      '',
+      '---',
+      '*Last updated: 2026-01-01*',
+    ].join('\n');
+
+    const pattern = /\*\*Plans:\*\* [^\n]+/g;
+    const result = replaceInCurrentMilestone(content, pattern, '**Plans:** 2/2 plans complete');
+
+    // Active milestone inside last <details> should be updated
+    expect(result).toContain('**Plans:** 2/2 plans complete');
+    // Archived milestone should remain untouched
+    expect(result).toContain('**Plans:** 1/1 plans');
+    // Footer should be preserved verbatim
+    expect(result).toContain('---');
+    expect(result).toContain('*Last updated: 2026-01-01*');
+  });
 });
 
 // ─── readModifyWriteRoadmapMd ───────────────────────────────────────────
