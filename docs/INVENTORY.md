@@ -54,7 +54,7 @@ Full roster at `agents/gsd-*.md`. The "Primary doc" column flags whether [`docs/
 
 ---
 
-## Commands (85 shipped)
+## Commands (86 shipped)
 
 Full roster at `commands/gsd/*.md`. The groupings below mirror `docs/COMMANDS.md` section order; each row carries the command name, a one-line role derived from the command's frontmatter `description:`, and a link to the source file. `tests/command-count-sync.test.cjs` locks the count against the filesystem.
 
@@ -172,6 +172,7 @@ Full roster at `commands/gsd/*.md`. The groupings below mirror `docs/COMMANDS.md
 | `/gsd-reapply-patches` | Reapply local modifications after a GSD update. | [commands/gsd/reapply-patches.md](../commands/gsd/reapply-patches.md) |
 | `/gsd-help` | Show available GSD commands and usage guide. | [commands/gsd/help.md](../commands/gsd/help.md) |
 | `/gsd-join-discord` | Join the GSD Discord community. | [commands/gsd/join-discord.md](../commands/gsd/join-discord.md) |
+| `/gsd-feedback` | File a GitHub issue (bug/feature/question) with auto-collected diagnostics, without leaving your AI session. | [commands/gsd/feedback.md](../commands/gsd/feedback.md) |
 
 ---
 

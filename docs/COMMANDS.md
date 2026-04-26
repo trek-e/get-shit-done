@@ -1614,3 +1614,32 @@ Open Discord community invite.
 ```bash
 /gsd-join-discord
 ```
+
+---
+
+### `/gsd-feedback`
+
+File a GitHub issue (bug, feature request, or question) with auto-collected diagnostics, without leaving your AI session.
+
+Invoke `/gsd-feedback` whenever you encounter errors or unexpected GSD behavior, want to request a feature, or have a question.
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `type` | **Yes** | `bug`, `feature`, or `question` |
+| `--title "..."` | **Yes** | Short issue title |
+| `--description "..."` | No | Issue body (prompted if omitted) |
+
+**Auto-collected diagnostics:**
+- GSD version
+- Node.js version
+- OS/platform
+- Current milestone and phase (from `.planning/STATE.md` if present)
+- Active project name
+
+**Submission flow:** tries `gh issue create` → browser URL fallback → print markdown
+
+```bash
+/gsd-feedback bug --title "Phase 3 execution stalls after tool call"
+/gsd-feedback feature --title "Add --dry-run flag to /gsd-execute-phase"
+/gsd-feedback question --title "How do I switch milestones mid-sprint?"
+```
