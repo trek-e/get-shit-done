@@ -359,6 +359,45 @@ describe('phaseAdd', () => {
     expect(phaseIdx).toBeLessThan(sepIdx);
     expect(phaseIdx).toBeGreaterThan(0);
   });
+
+  it('falls back to filesystem scan when no phase matches in ROADMAP (regression #2726)', async () => {
+    const { phaseAdd } = await import('./phase-lifecycle.js');
+
+    // ROADMAP with no recognizable phase entries
+    const roadmap = '# Roadmap\n\n## Current Milestone: v5.0\n\nSome content without phases\n';
+
+    await setupTestProject(tmpDir, {
+      roadmap,
+      state: MINIMAL_STATE,
+      phases: ['45-legacy-phase', '46-another-phase'],
+    });
+
+    const result = await phaseAdd(['new-feature'], tmpDir);
+    const data = result.data as Record<string, unknown>;
+
+    // Should detect phases 45 and 46 on disk, so new phase = 47
+    expect(data.phase_number).toBe(47);
+  });
+
+  it('filesystem fallback handles project-code-prefixed phase directories', async () => {
+    const { phaseAdd } = await import('./phase-lifecycle.js');
+
+    // ROADMAP with no recognizable phase entries
+    const roadmap = '# Roadmap\n\n## Current Milestone: v5.0\n\nSome content without phases\n';
+
+    await setupTestProject(tmpDir, {
+      roadmap,
+      state: MINIMAL_STATE,
+      phases: ['CK-45-legacy-phase', 'CK-46-another-phase'],
+    });
+
+    const result = await phaseAdd(['new-feature'], tmpDir);
+    const data = result.data as Record<string, unknown>;
+
+    // Regex /^(?:[A-Z][A-Z0-9]*-)?(\d+)-/ should extract 45 and 46 from
+    // prefixed dirs, so new phase = 47
+    expect(data.phase_number).toBe(47);
+  });
 });
 
 // ─── phaseAddBatch ─────────────────────────────────────────────────────
