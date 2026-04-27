@@ -140,10 +140,10 @@ fi
 ```bash
 INIT=$(gsd-sdk query init.quick "$DESCRIPTION")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
-AGENT_SKILLS_PLANNER=$(gsd-sdk query agent-skills gsd-planner 2>/dev/null)
-AGENT_SKILLS_EXECUTOR=$(gsd-sdk query agent-skills gsd-executor 2>/dev/null)
-AGENT_SKILLS_CHECKER=$(gsd-sdk query agent-skills gsd-checker 2>/dev/null)
-AGENT_SKILLS_VERIFIER=$(gsd-sdk query agent-skills gsd-verifier 2>/dev/null)
+AGENT_SKILLS_PLANNER=$(gsd-sdk query agent-skills gsd-planner)
+AGENT_SKILLS_EXECUTOR=$(gsd-sdk query agent-skills gsd-executor)
+AGENT_SKILLS_CHECKER=$(gsd-sdk query agent-skills gsd-plan-checker)
+AGENT_SKILLS_VERIFIER=$(gsd-sdk query agent-skills gsd-verifier)
 ```
 
 Parse JSON for: `planner_model`, `executor_model`, `checker_model`, `verifier_model`, `commit_docs`, `branch_name`, `quick_id`, `slug`, `date`, `timestamp`, `quick_dir`, `task_dir`, `roadmap_exists`, `planning_exists`.
@@ -152,14 +152,23 @@ Parse JSON for: `planner_model`, `executor_model`, `checker_model`, `verifier_mo
 USE_WORKTREES=$(gsd-sdk query config-get workflow.use_worktrees 2>/dev/null || echo "true")
 ```
 
-If the project uses git submodules, worktree isolation is skipped:
+If the project uses git submodules, worktree isolation is unsafe **only when the quick task touches a submodule path**. The previous behavior unconditionally disabled worktree isolation whenever `.gitmodules` existed, which penalised every quick task in a submodule project even when the task was nowhere near a submodule. Parse submodule paths from `.gitmodules` so the executor can act on actual submodule paths rather than the mere file's existence:
 
 ```bash
+# Parse submodule paths from .gitmodules once (empty if no .gitmodules).
+# SUBMODULE_PATHS is a newline-separated list of repo-relative paths used as
+# a fail-loud commit-time guard inside the quick-task executor — if the
+# executor stages any path that falls inside SUBMODULE_PATHS, it must abort
+# the commit and surface the conflict rather than silently corrupting the
+# submodule state.
 if [ -f .gitmodules ]; then
-  echo "[worktree] Submodule project detected (.gitmodules exists) — falling back to sequential execution"
-  USE_WORKTREES=false
+  SUBMODULE_PATHS=$(git config --file .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}')
+else
+  SUBMODULE_PATHS=""
 fi
 ```
+
+Quick mode does not have a pre-declared `files_modified` list (the task is freeform), so use a fail-loud guard at commit time: when the executor stages files for the quick-task commit, if any staged path falls inside a `SUBMODULE_PATHS` entry, abort with a clear error explaining that worktree-isolated commits cannot safely span submodule boundaries — the user can re-run with `workflow.use_worktrees=false` to fall back to sequential execution on the main tree. If `SUBMODULE_PATHS` is empty (no `.gitmodules` in the repo), worktree isolation proceeds normally.
 
 **If `roadmap_exists` is false:** Error — Quick mode requires an active project with ROADMAP.md. Run `/gsd-new-project` first.
 
@@ -392,6 +401,8 @@ Return: ## RESEARCH COMPLETE with file path
 )
 ```
 
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Task() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+
 After researcher returns:
 1. Verify research exists at `${QUICK_DIR}/${quick_id}-RESEARCH.md`
 2. Report: "Research complete: ${QUICK_DIR}/${quick_id}-RESEARCH.md"
@@ -447,6 +458,8 @@ Return: ## PLANNING COMPLETE with plan path
   description="Quick plan: ${DESCRIPTION}"
 )
 ```
+
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Task() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
 
 After planner returns:
 1. Verify plan exists at `${QUICK_DIR}/${quick_id}-PLAN.md`
@@ -512,6 +525,8 @@ Task(
 )
 ```
 
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Task() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+
 **Handle checker return:**
 
 - **`## VERIFICATION PASSED`:** Display confirmation, proceed to step 6.
@@ -557,6 +572,8 @@ Task(
 )
 ```
 
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Task() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+
 After planner returns → spawn checker again, increment iteration_count.
 
 **If iteration_count >= 2:**
@@ -564,6 +581,24 @@ After planner returns → spawn checker again, increment iteration_count.
 Display: `Max iterations reached. ${N} issues remain:` + issue list
 
 Offer: 1) Force proceed, 2) Abort
+
+---
+
+**Step 5.6: Pre-dispatch plan commit (worktree mode only)**
+
+When `USE_WORKTREES !== "false"`, commit PLAN.md to the current branch **before** spawning the executor. This ensures the worktree inherits PLAN.md at its branch HEAD so the executor can read it via a worktree-rooted path — avoiding the main-repo path priming that triggers CC #36182 path-resolution drift.
+
+Skip this step entirely if `USE_WORKTREES === "false"` (non-worktree mode: PLAN.md is committed in Step 8 as usual).
+
+```bash
+if [ "${USE_WORKTREES}" != "false" ]; then
+  COMMIT_DOCS=$(gsd-sdk query config-get commit_docs 2>/dev/null || echo "true")
+  if [ "$COMMIT_DOCS" != "false" ]; then
+    git add "${QUICK_DIR}/${quick_id}-PLAN.md"
+    git commit --no-verify -m "docs(${quick_id}): pre-dispatch plan for ${DESCRIPTION}" -- "${QUICK_DIR}/${quick_id}-PLAN.md" || true
+  fi
+fi
+```
 
 ---
 
@@ -601,9 +636,44 @@ This corrects a known issue where EnterWorktree creates branches from main inste
 
 ${AGENT_SKILLS_EXECUTOR}
 
+<submodule_commit_guard>
+SUBMODULE_PATHS for this project: ${SUBMODULE_PATHS}
+
+If SUBMODULE_PATHS is non-empty, you MUST run this fail-loud guard immediately
+before EVERY git commit you create during this quick task (after \`git add\`,
+before \`git commit\`). Quick mode does not have a pre-declared files_modified
+list, so the guard runs at commit time:
+
+\`\`\`bash
+SUBMODULE_PATHS=\"${SUBMODULE_PATHS}\"
+if [ -n \"\$SUBMODULE_PATHS\" ]; then
+  STAGED=\$(git diff --cached --name-only)
+  for sm_raw in \$SUBMODULE_PATHS; do
+    sm=\"\${sm_raw#./}\"
+    sm=\"\${sm%/}\"
+    [ -z \"\$sm\" ] && continue
+    for f_raw in \$STAGED; do
+      f=\"\${f_raw#./}\"
+      f=\"\${f%/}\"
+      case \"\$f\" in
+        \"\$sm\"|\"\$sm\"/*)
+          echo \"ABORT: staged path \$f_raw falls inside submodule \$sm — worktree-isolated commits cannot safely span submodule boundaries. Re-run with workflow.use_worktrees=false.\" >&2
+          exit 1 ;;
+      esac
+    done
+  done
+fi
+\`\`\`
+
+If the guard aborts, do NOT attempt the commit, do NOT remove the staged files,
+and do NOT continue subsequent tasks. Surface the abort message in your
+SUMMARY.md and stop — the user must rerun with worktrees disabled.
+</submodule_commit_guard>
+
 <constraints>
 - Execute all tasks in the plan
 - Commit each task atomically (code changes only)
+- Run the <submodule_commit_guard> bash block before every \`git commit\` if SUBMODULE_PATHS is non-empty
 - Create summary at: ${QUICK_DIR}/${quick_id}-SUMMARY.md
 - Do NOT commit docs artifacts (SUMMARY.md, STATE.md, PLAN.md) — the orchestrator handles the docs commit in Step 8
 - Do NOT update ROADMAP.md (quick tasks are separate from planned phases)
@@ -616,12 +686,21 @@ ${AGENT_SKILLS_EXECUTOR}
 )
 ```
 
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Task() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+
 After executor returns:
 1. **Worktree cleanup:** If the executor ran with `isolation="worktree"`, merge the worktree branch back and clean up:
    ```bash
-   # Find worktrees created by the executor
-   WORKTREES=$(git worktree list --porcelain | grep "^worktree " | grep -v "$(pwd)$" | sed 's/^worktree //')
-   for WT in $WORKTREES; do
+   # Find worktrees created by the executor.
+   # Inclusion-based filter (#2774): match ONLY agent-spawned worktrees under
+   # `.claude/worktrees/agent-` (the namespace Claude Code's `isolation="worktree"`
+   # uses). The previous exclusion filter (`grep -v "$(pwd)$"`) destroyed the parent
+   # workspace's `.git` whenever the workspace itself was a worktree (multi-workspace
+   # setups, and the cross-drive Windows case where `git worktree list` reports the
+   # registry path on a different drive than `$(pwd)`).
+   # Read line-by-line so worktree paths containing whitespace are preserved (#2774).
+   while IFS= read -r WT; do
+     [ -z "$WT" ] && continue
      WT_BRANCH=$(git -C "$WT" rev-parse --abbrev-ref HEAD 2>/dev/null)
      if [ -n "$WT_BRANCH" ] && [ "$WT_BRANCH" != "HEAD" ]; then
        # --- Orchestrator file protection (#1756) ---
@@ -682,10 +761,22 @@ After executor returns:
          git merge "$WT_BRANCH" --no-edit -m "chore: merge rescued SUMMARY.md from executor worktree ($WT_BRANCH)" 2>/dev/null || true
        fi
 
-       git worktree remove "$WT" --force 2>/dev/null || true
+       if ! git worktree remove "$WT" --force; then
+         WT_NAME=$(basename "$WT")
+         if [ -f ".git/worktrees/${WT_NAME}/locked" ]; then
+           echo "⚠ Worktree $WT is locked — attempting to unlock and retry"
+           git worktree unlock "$WT" 2>/dev/null || true
+           if ! git worktree remove "$WT" --force; then
+             echo "⚠ Residual worktree at $WT — manual cleanup required after session exits:"
+             echo "    git worktree unlock \"$WT\" && git worktree remove \"$WT\" --force && git branch -D \"$WT_BRANCH\""
+           fi
+         else
+           echo "⚠ Residual worktree at $WT (remove failed) — investigate manually"
+         fi
+       fi
        git branch -D "$WT_BRANCH" 2>/dev/null || true
      fi
-   done
+   done < <(git worktree list --porcelain | grep "^worktree " | grep "\.claude/worktrees/agent-" | sed 's/^worktree //')
    ```
    If `workflow.use_worktrees` is `false`, skip this step.
 2. Verify summary exists at `${QUICK_DIR}/${quick_id}-SUMMARY.md`
@@ -745,6 +836,8 @@ Task(
 )
 ```
 
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Task() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+
 If review produces findings, display advisory message. **Error handling:** Failures are non-blocking — catch and proceed.
 
 ---
@@ -780,6 +873,8 @@ Check must_haves against actual codebase. Create VERIFICATION.md at ${QUICK_DIR}
   description="Verify: ${DESCRIPTION}"
 )
 ```
+
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Task() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
 
 Read verification status:
 ```bash
@@ -862,6 +957,7 @@ Build file list:
 - If `$DISCUSS_MODE` and context file exists: `${QUICK_DIR}/${quick_id}-CONTEXT.md`
 - If `$RESEARCH_MODE` and research file exists: `${QUICK_DIR}/${quick_id}-RESEARCH.md`
 - If `$VALIDATE_MODE` and verification file exists: `${QUICK_DIR}/${quick_id}-VERIFICATION.md`
+- If `${QUICK_DIR}/${quick_id}-deferred-items.md` exists: `${QUICK_DIR}/${quick_id}-deferred-items.md`
 
 ```bash
 # Explicitly stage all artifacts before commit — PLAN.md may be untracked
@@ -874,7 +970,7 @@ if [ "$COMMIT_DOCS" = "false" ]; then
 else
   git add ${file_list} 2>/dev/null
 fi
-gsd-sdk query commit "docs(quick-${quick_id}): ${DESCRIPTION}" ${file_list}
+gsd-sdk query commit "docs(quick-${quick_id}): ${DESCRIPTION}" --files ${file_list}
 ```
 
 Get final commit hash:
