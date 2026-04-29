@@ -11,7 +11,7 @@
  * #2643. Since then, workflows have been updated to use hyphen form (#2808).
  *
  * Fix: skillFrontmatterName() now returns the hyphen form unchanged.
- * Four workflow Skill() colon calls updated to hyphen.
+ * Workflow Skill() colon calls are updated to hyphen.
  *
  * This test verifies:
  * 1. skillFrontmatterName returns hyphen form (not colon).
@@ -27,9 +27,10 @@ const { describe, test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { cleanup, createTempDir } = require('./helpers.cjs');
 
 const ROOT = path.join(__dirname, '..');
-const { convertClaudeCommandToClaudeSkill, skillFrontmatterName } =
+const { convertClaudeCommandToClaudeSkill, copyCommandsAsClaudeSkills, skillFrontmatterName } =
   require(path.join(ROOT, 'bin', 'install.js'));
 
 const WORKFLOWS_DIR = path.join(ROOT, 'get-shit-done', 'workflows');
@@ -100,7 +101,7 @@ describe('bug-2808: SKILL.md name: uses hyphen form', () => {
       // Parsing line-by-line is more precise than a multi-line regex
       // and avoids false positives from incidental matches in prose.
       for (const line of stripped.split('\n')) {
-        const colonCallRe = /Skill\(skill=['"]gsd:([a-z0-9-]+)['"]/gi;
+        const colonCallRe = /Skill\(skill=\\?['"]gsd:([a-z0-9-]+)\\?['"]/gi;
         let m;
         while ((m = colonCallRe.exec(line)) !== null) {
           colonCalls.push(`${path.basename(f)}: Skill(skill="gsd:${m[1]}")`);
@@ -112,5 +113,31 @@ describe('bug-2808: SKILL.md name: uses hyphen form', () => {
       [],
       'deprecated colon-form Skill() calls found — update to gsd-<cmd>: ' + colonCalls.join(', ')
     );
+  });
+
+  test('generated autocomplete skill surface uses hyphen names without underscores', (t) => {
+    const tmp = createTempDir('gsd-autocomplete-surface-');
+    t.after(() => cleanup(tmp));
+    const skillsDir = path.join(tmp, 'skills');
+    copyCommandsAsClaudeSkills(COMMANDS_DIR, skillsDir, 'gsd', '$HOME/.claude/', 'claude', true);
+
+    const skillDirs = fs.readdirSync(skillsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('gsd-'))
+      .map((entry) => entry.name)
+      .sort();
+
+    assert.ok(skillDirs.includes('gsd-extract-learnings'), 'autocomplete surface must include gsd-extract-learnings');
+    assert.ok(!skillDirs.includes('gsd-extract_learnings'), 'autocomplete surface must not include gsd-extract_learnings');
+
+    for (const skillDir of skillDirs) {
+      assert.ok(!skillDir.includes('_'), `${skillDir}: generated skill directory must not contain underscores`);
+      const skillContent = fs.readFileSync(path.join(skillsDir, skillDir, 'SKILL.md'), 'utf-8');
+      const nameEntry = skillContent.match(/^name:\s*(.+)$/m);
+      assert.ok(nameEntry, `${skillDir}: generated SKILL.md is missing name: frontmatter`);
+      const name = nameEntry[1].trim();
+      assert.ok(name.startsWith('gsd-'), `${skillDir}: autocomplete name must start with gsd-, got ${name}`);
+      assert.ok(!name.includes(':'), `${skillDir}: autocomplete name must not contain colon, got ${name}`);
+      assert.ok(!name.includes('_'), `${skillDir}: autocomplete name must not contain underscore, got ${name}`);
+    }
   });
 });

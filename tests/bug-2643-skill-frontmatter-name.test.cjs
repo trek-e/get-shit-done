@@ -42,7 +42,7 @@ function collectFiles(dir, results) {
 
 function extractSkillNamesHyphen(content) {
   const names = new Set();
-  const rx = /Skill\(skill=['"]gsd-([a-z0-9-]+)['"]/gi;
+  const rx = /Skill\(skill=\\?['"]gsd-([a-z0-9-]+)\\?['"]/gi;
   let m;
   while ((m = rx.exec(content)) !== null) names.add('gsd-' + m[1]);
   return names;
@@ -50,7 +50,7 @@ function extractSkillNamesHyphen(content) {
 
 function extractSkillNamesColon(content) {
   const names = new Set();
-  const rx = /Skill\(skill=['"]gsd:([a-z0-9-]+)['"]/gi;
+  const rx = /Skill\(skill=\\?['"]gsd:([a-z0-9-]+)\\?['"]/gi;
   let m;
   while ((m = rx.exec(content)) !== null) names.add('gsd:' + m[1]);
   return names;

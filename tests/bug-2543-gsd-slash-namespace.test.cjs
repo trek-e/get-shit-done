@@ -1,5 +1,7 @@
 'use strict';
 
+// allow-test-rule: structural-regression-guard
+
 /**
  * Slash-command namespace invariant (#2543, updated by #2697).
  *
@@ -14,8 +16,8 @@
  *
  * Invariant enforced here:
  *   No `/gsd:<cmd>` pattern in user-facing source text.
- *   `Skill(skill="gsd:<cmd>")` calls (no leading slash) are ALLOWED — they use
- *   frontmatter `name:` resolution internally and are not user-typed commands.
+ *   `Skill(skill="gsd:<cmd>")` calls are checked by the skill frontmatter
+ *   parity tests and should use `Skill(skill="gsd-<cmd>")`.
  *
  * Exceptions:
  *   - CHANGELOG.md: historical entries document commands under their original names.
@@ -38,6 +40,16 @@ const SEARCH_DIRS = [
   path.join(ROOT, 'get-shit-done', 'contexts'),
   COMMANDS_DIR,
 ];
+
+const DOC_SEARCH_FILES = [
+  'README.md',
+  'docs/AGENTS.md',
+  'docs/ARCHITECTURE.md',
+  'docs/CLI-TOOLS.md',
+  'docs/COMMANDS.md',
+  'docs/FEATURES.md',
+  'docs/USER-GUIDE.md',
+].map((rel) => path.join(ROOT, rel));
 
 const EXTENSIONS = new Set(['.md', '.cjs', '.js']);
 
@@ -62,6 +74,7 @@ const cmdNames = fs.readdirSync(COMMANDS_DIR)
 const retiredPattern = new RegExp(`/gsd:(${cmdNames.join('|')})(?=[^a-zA-Z0-9_-]|$)`);
 
 const allFiles = SEARCH_DIRS.flatMap(d => collectFiles(d));
+const allUserFacingFiles = allFiles.concat(DOC_SEARCH_FILES.filter((file) => fs.existsSync(file)));
 
 describe('slash-command namespace invariant (#2697)', () => {
   test('commands/gsd/ directory contains known command files', () => {
@@ -72,7 +85,7 @@ describe('slash-command namespace invariant (#2697)', () => {
 
   test('no /gsd:<cmd> retired syntax in user-facing source files', () => {
     const violations = [];
-    for (const file of allFiles) {
+    for (const file of allUserFacingFiles) {
       const src = fs.readFileSync(file, 'utf-8');
       const lines = src.split('\n');
       for (let i = 0; i < lines.length; i++) {
@@ -85,6 +98,32 @@ describe('slash-command namespace invariant (#2697)', () => {
       violations.length,
       0,
       `Found ${violations.length} retired /gsd:<cmd> reference(s) — use /gsd-<cmd> instead:\n${violations.slice(0, 10).join('\n')}`,
+    );
+  });
+
+  test('command filenames use canonical hyphenated command slugs', () => {
+    const underscoreFiles = fs.readdirSync(COMMANDS_DIR)
+      .filter((f) => f.endsWith('.md') && f.includes('_'));
+    assert.deepStrictEqual(
+      underscoreFiles,
+      [],
+      'command filenames feed generated skill/autocomplete names and must not contain underscores',
+    );
+  });
+
+  test('fix-slash-commands rewrites retired colon syntax to hyphen syntax', () => {
+    const script = fs.readFileSync(path.join(ROOT, 'scripts', 'fix-slash-commands.cjs'), 'utf-8');
+    assert.ok(
+      script.includes('/gsd:('),
+      'fix-slash-commands.cjs must match retired /gsd:<cmd> syntax',
+    );
+    assert.ok(
+      script.includes('`/gsd-${cmd}`'),
+      'fix-slash-commands.cjs must rewrite to canonical /gsd-<cmd> syntax',
+    );
+    assert.ok(
+      !script.includes('`/gsd:${cmd}`'),
+      'fix-slash-commands.cjs must not rewrite canonical hyphen syntax back to colon syntax',
     );
   });
 

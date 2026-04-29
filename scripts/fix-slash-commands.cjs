@@ -1,6 +1,6 @@
 'use strict';
 /**
- * One-shot script: replace /gsd-<cmd> with /gsd:<cmd> for known command names.
+ * One-shot script: replace retired /gsd:<cmd> with /gsd-<cmd> for known command names.
  * Only replaces when followed by a word boundary (space, newline, quote, backtick, ), end).
  */
 
@@ -13,8 +13,8 @@ const cmdNames = fs.readdirSync(COMMANDS_DIR)
   .map(f => f.replace(/\.md$/, ''))
   .sort((a, b) => b.length - a.length); // longest first to avoid partial matches
 
-// Build regex: /gsd-(cmd1|cmd2|...) followed by non-word-char or end
-const pattern = new RegExp(`/gsd-(${cmdNames.join('|')})(?=[^a-zA-Z0-9_-]|$)`, 'g');
+// Build regex: /gsd:(cmd1|cmd2|...) followed by non-word-char or end
+const pattern = new RegExp(`/gsd:(${cmdNames.join('|')})(?=[^a-zA-Z0-9_-]|$)`, 'g');
 
 const SEARCH_DIRS = [
   path.join(__dirname, '..', 'get-shit-done', 'bin', 'lib'),
@@ -35,7 +35,7 @@ function processDir(dir) {
       processDir(full);
     } else if (EXTENSIONS.has(path.extname(e.name))) {
       const src = fs.readFileSync(full, 'utf-8');
-      const replaced = src.replace(pattern, (_, cmd) => `/gsd:${cmd}`);
+      const replaced = src.replace(pattern, (_, cmd) => `/gsd-${cmd}`);
       if (replaced !== src) {
         fs.writeFileSync(full, replaced, 'utf-8');
         const count = (src.match(pattern) || []).length;
