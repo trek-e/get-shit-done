@@ -1,6 +1,6 @@
 ---
 name: gsd:mvp-phase
-description: Plan a phase as a vertical MVP slice — guides through user story, SPIDR splitting check, then delegates to plan-phase
+description: Plan a phase as a vertical MVP slice — user story, SPIDR splitting, then plan-phase
 argument-hint: "<phase-number>"
 agent: gsd-planner
 allowed-tools:
