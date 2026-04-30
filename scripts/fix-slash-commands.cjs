@@ -22,6 +22,12 @@ const SEARCH_DIRS = [
 const EXTENSIONS = new Set(['.md', '.cjs', '.js']);
 
 function buildPattern(cmdNames) {
+  // Empty input would compile `/gsd:()(?=[^a-zA-Z0-9_-]|$)/g`, which the regex
+  // engine still matches at any `/gsd:` token followed by a non-word boundary
+  // (e.g. EOL, whitespace, punctuation) — rewriting it to a stray `/gsd-`.
+  // Short-circuit so the caller can no-op on a missing/empty registry rather
+  // than perform an unintended broad rewrite.
+  if (!Array.isArray(cmdNames) || cmdNames.length === 0) return null;
   const sorted = [...cmdNames].sort((a, b) => b.length - a.length); // longest first to avoid partial matches
   return new RegExp(`/gsd:(${sorted.join('|')})(?=[^a-zA-Z0-9_-]|$)`, 'g');
 }
@@ -33,6 +39,7 @@ function buildPattern(cmdNames) {
  */
 function transformContent(src, cmdNames) {
   const pattern = buildPattern(cmdNames);
+  if (!pattern) return src;
   return src.replace(pattern, (_, cmd) => `/gsd-${cmd}`);
 }
 
@@ -44,6 +51,7 @@ function readCmdNames() {
 
 function processDir(dir, cmdNames) {
   const pattern = buildPattern(cmdNames);
+  if (!pattern) return;
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
   for (const e of entries) {

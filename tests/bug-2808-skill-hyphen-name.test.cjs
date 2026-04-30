@@ -101,7 +101,10 @@ describe('bug-2808: SKILL.md name: uses hyphen form', () => {
       // Parsing line-by-line is more precise than a multi-line regex
       // and avoids false positives from incidental matches in prose.
       for (const line of stripped.split('\n')) {
-        const colonCallRe = /Skill\(skill=\\?['"]gsd:([a-z0-9-]+)\\?['"]/gi;
+        // Tolerate whitespace around the parenthesis, the `skill` keyword,
+        // and the `=` so variants like `Skill( skill = "gsd:foo" )` are still
+        // flagged. Without the `\s*` allowances, drift slips through this guard.
+        const colonCallRe = /Skill\(\s*skill\s*=\s*\\?['"]gsd:([a-z0-9-]+)\\?['"]/gi;
         let m;
         while ((m = colonCallRe.exec(line)) !== null) {
           colonCalls.push(`${path.basename(f)}: Skill(skill="gsd:${m[1]}")`);
