@@ -45,7 +45,7 @@ function parseRequirements(reqMd) {
     cm = checkboxRe.exec(reqMd);
   }
 
-  const tableIdRe = new RegExp(`\\|\\s*(${ID_PATTERN})\\s*\\|`, 'g');
+  const tableFirstCellRe = new RegExp(`^\\s*\\|\\s*(${ID_PATTERN})\\s*\\|`);
   const separatorRowRe = /^\s*\|[\s:|-]+\|\s*$/;
   const lines = reqMd.split(/\r?\n/);
 
@@ -57,16 +57,13 @@ function parseRequirements(reqMd) {
     if (separatorRowRe.test(line)) continue;
     if (i + 1 < lines.length && separatorRowRe.test(lines[i + 1])) continue;
 
-    let tm = tableIdRe.exec(line);
-    while (tm !== null) {
-      const id = tm[1];
-      if (!seen.has(id)) {
-        seen.add(id);
-        out.push({ id, text: '' });
-      }
-      tm = tableIdRe.exec(line);
+    const tm = tableFirstCellRe.exec(line);
+    if (!tm) continue;
+    const id = tm[1];
+    if (!seen.has(id)) {
+      seen.add(id);
+      out.push({ id, text: '' });
     }
-    tableIdRe.lastIndex = 0;
   }
 
   return out;
