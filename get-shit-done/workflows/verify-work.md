@@ -37,6 +37,15 @@ AGENT_SKILLS_CHECKER=$(gsd-sdk query agent-skills gsd-plan-checker)
 ```
 
 Parse JSON for: `planner_model`, `checker_model`, `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `has_verification`, `uat_path`.
+
+```bash
+# MVP mode detection — read the phase's mode field from ROADMAP.md
+PHASE_MODE=$(gsd-sdk query roadmap.get-phase "${phase_number}" --pick mode 2>/dev/null || echo "")
+MVP_MODE=false
+if [ "$PHASE_MODE" = "mvp" ]; then
+  MVP_MODE=true
+fi
+```
 </step>
 
 <step name="check_active_session">
@@ -135,6 +144,21 @@ Read each SUMMARY.md to extract testable deliverables.
 </step>
 
 <step name="extract_tests">
+**MVP-mode UAT framing.** When `MVP_MODE=true`, follow the rules in `@~/.claude/get-shit-done/references/verify-mvp-mode.md`. Briefly:
+
+1. Generate the UAT script in three ordered sections: (a) user-flow walk-through derived from the phase's user-story goal, (b) technical checks (deferred — only run after user flow passes), (c) coverage check (goal-backward, narrowed to the user story's outcome clause).
+2. **User-flow steps run first.** Each step is one user action: open, fill, click, type, observe. No HTTP verbs, no JSON shapes, no error codes in user-flow steps.
+3. **Technical checks are deferred.** They run AFTER the user flow passes — same checks as non-MVP mode (endpoint schemas, error states, edge cases), just reordered.
+4. **If user-flow step N fails, do not advance.** The verdict is FAIL; technical checks do not run. The user can re-run after fixing the underlying flow.
+
+When `MVP_MODE=false` (mode is null, absent, or the phase has no `**Mode:**` line in ROADMAP.md), fall back to the standard UAT generation path — no behavioral change.
+
+**User-story format guard.** When `MVP_MODE=true`, also verify the phase's goal is in user-story format (matches `/^As a .+, I want to .+, so that .+\.$/`). If the goal is `mode: mvp` but NOT in user-story format, surface the discrepancy:
+
+> "Phase ${PHASE} has `**Mode:** mvp` in ROADMAP.md but the **Goal:** is not in user-story format. Run `/gsd mvp-phase ${PHASE}` to set a user-story goal before verifying."
+
+Halt UAT generation and exit cleanly. Do not attempt to derive user-flow steps from a non-user-story goal — that would produce a low-quality UAT.
+
 **Extract testable deliverables from SUMMARY.md:**
 
 Parse for:
