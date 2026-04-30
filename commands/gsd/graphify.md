@@ -193,6 +193,19 @@ Wait for the agent to complete.
 
 ---
 
+## MVP-Mode Node Rendering
+
+**MVP-mode rendering.** When a phase has `**Mode:** mvp` in ROADMAP.md (resolved via `gsd-sdk query roadmap.get-phase --pick mode`), render its graph node with two distinct visual signals:
+
+1. **Distinct fill color.** Use `#22c55e` (green) for MVP-mode phase nodes. Standard phases keep the default fill color. Two-channel signaling (color + label) handles color-blind and grayscale renders.
+2. **`MVP` label suffix.** Append ` (MVP)` to the node's label text. Example: a phase originally labeled `Phase 1: User Auth` renders as `Phase 1: User Auth (MVP)`.
+
+Both signals fire together — never just one. Per PRD Q5 decision, the goal is unambiguous visual distinction in any render context.
+
+When the phase mode is null/absent, render with the standard color and label — no behavioral change for non-MVP phases.
+
+---
+
 ## Anti-Patterns
 
 1. DO NOT spawn an agent for query/status/diff operations -- these are inline CLI calls
