@@ -52,16 +52,27 @@ function discoverDocSearchFiles(root) {
   const out = [];
   const readme = path.join(root, 'README.md');
   if (fs.existsSync(readme)) out.push(readme);
-  const docsDir = path.join(root, 'docs');
-  let entries;
-  try {
-    entries = fs.readdirSync(docsDir, { withFileTypes: true });
-  } catch {
-    return out;
-  }
-  for (const entry of entries) {
-    if (entry.isFile() && entry.name.endsWith('.md')) {
-      out.push(path.join(docsDir, entry.name));
+  // Walk docs/ recursively. Localized translation trees (docs/ja-JP/,
+  // docs/zh-CN/, docs/ko-KR/, docs/pt-BR/) and nested doc collections
+  // (docs/skills/, docs/superpowers/) all carry user-facing markdown that
+  // can drift; a top-level-only scan would silently exclude them. Iterative
+  // stack walk avoids recursion limits on deep trees.
+  const stack = [path.join(root, 'docs')];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        out.push(full);
+      }
     }
   }
   return out.sort();
