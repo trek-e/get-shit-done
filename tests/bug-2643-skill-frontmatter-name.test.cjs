@@ -159,8 +159,16 @@ describe('skill frontmatter name parity (#2643 / #2808)', () => {
       const skillDirName = 'gsd-' + base;
       const src = fs.readFileSync(path.join(COMMANDS_DIR, cmd), 'utf-8');
       const out = convertClaudeCommandToClaudeSkill(src, skillDirName);
-      const m = out.match(/^---\nname:\s*(.+)$/m);
-      if (m) emitted.add(m[1].trim());
+      // Scope `name:` extraction to the leading frontmatter block — a
+      // multiline match against the whole document would happily pick up
+      // a `name: …` line in a YAML example or inline code snippet in the
+      // body and treat it as the emitted skill name (false-pass risk).
+      // The sibling test at line 67-82 uses the same structural scoping.
+      const fmMatch = out.match(/^---\n([\s\S]*?)\n---/);
+      assert.ok(fmMatch, `${cmd}: generated skill content must have frontmatter`);
+      const nameEntry = fmMatch[1].split('\n').find((l) => l.startsWith('name:'));
+      assert.ok(nameEntry, `${cmd}: generated SKILL.md is missing required name: field`);
+      emitted.add(nameEntry.replace(/^name:\s*/, '').trim());
     }
 
     const missing = [];
