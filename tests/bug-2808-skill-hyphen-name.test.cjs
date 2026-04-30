@@ -124,16 +124,37 @@ describe('bug-2808: SKILL.md name: uses hyphen form', () => {
     const skillsDir = path.join(tmp, 'skills');
     copyCommandsAsClaudeSkills(COMMANDS_DIR, skillsDir, 'gsd', '$HOME/.claude/', 'claude', true);
 
+    // Don't filter the directory listing by `startsWith('gsd-')` — that
+    // would silently hide exactly the kind of drift this test exists to
+    // catch (a `gsd:extract-learnings` colon variant or a bare
+    // `extract-learnings` without the namespace prefix would never be
+    // collected, and the loop below would never see them). Capture every
+    // generated directory and assert the namespace invariants explicitly.
     const skillDirs = fs.readdirSync(skillsDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name.startsWith('gsd-'))
+      .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort();
+
+    assert.ok(skillDirs.length > 0, 'expected generated skill directories under skillsDir');
+    for (const dir of skillDirs) {
+      assert.ok(
+        dir.startsWith('gsd-'),
+        `${dir}: generated skill directory must start with the canonical 'gsd-' namespace`,
+      );
+      assert.ok(
+        !dir.includes(':'),
+        `${dir}: generated skill directory must not contain the retired colon namespace separator`,
+      );
+      assert.ok(
+        !dir.includes('_'),
+        `${dir}: generated skill directory must use hyphens, not underscores`,
+      );
+    }
 
     assert.ok(skillDirs.includes('gsd-extract-learnings'), 'autocomplete surface must include gsd-extract-learnings');
     assert.ok(!skillDirs.includes('gsd-extract_learnings'), 'autocomplete surface must not include gsd-extract_learnings');
 
     for (const skillDir of skillDirs) {
-      assert.ok(!skillDir.includes('_'), `${skillDir}: generated skill directory must not contain underscores`);
       const skillContent = fs.readFileSync(path.join(skillsDir, skillDir, 'SKILL.md'), 'utf-8');
       // Scope the name: lookup to the YAML frontmatter block so a stray
       // `name:` line in the body cannot satisfy the assertion.
