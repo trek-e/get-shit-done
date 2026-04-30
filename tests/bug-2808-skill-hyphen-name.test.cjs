@@ -132,9 +132,13 @@ describe('bug-2808: SKILL.md name: uses hyphen form', () => {
     for (const skillDir of skillDirs) {
       assert.ok(!skillDir.includes('_'), `${skillDir}: generated skill directory must not contain underscores`);
       const skillContent = fs.readFileSync(path.join(skillsDir, skillDir, 'SKILL.md'), 'utf-8');
-      const nameEntry = skillContent.match(/^name:\s*(.+)$/m);
-      assert.ok(nameEntry, `${skillDir}: generated SKILL.md is missing name: frontmatter`);
-      const name = nameEntry[1].trim();
+      // Scope the name: lookup to the YAML frontmatter block so a stray
+      // `name:` line in the body cannot satisfy the assertion.
+      const fmMatch = skillContent.match(/^---\n([\s\S]*?)\n---/);
+      assert.ok(fmMatch, `${skillDir}: generated SKILL.md must include frontmatter`);
+      const nameLine = fmMatch[1].split('\n').find((l) => /^name:\s*/.test(l));
+      assert.ok(nameLine, `${skillDir}: generated SKILL.md is missing name: frontmatter`);
+      const name = nameLine.replace(/^name:\s*/, '').trim();
       assert.ok(name.startsWith('gsd-'), `${skillDir}: autocomplete name must start with gsd-, got ${name}`);
       assert.ok(!name.includes(':'), `${skillDir}: autocomplete name must not contain colon, got ${name}`);
       assert.ok(!name.includes('_'), `${skillDir}: autocomplete name must not contain underscore, got ${name}`);

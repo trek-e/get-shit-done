@@ -39,9 +39,11 @@ describe('autonomous --interactive flag (#1413)', () => {
 
   test('workflow uses discuss-phase skill in interactive mode', () => {
     const content = fs.readFileSync(workflowPath, 'utf8');
+    // Per #2697 the user-facing form is the hyphen invariant gsd-discuss-phase;
+    // the colon form was retired and is enforced absent by bug-2543 tests.
     assert.ok(
-      content.includes('gsd:discuss-phase') && content.includes('INTERACTIVE'),
-      'workflow should invoke gsd:discuss-phase when INTERACTIVE is set'
+      content.includes('gsd-discuss-phase') && content.includes('INTERACTIVE'),
+      'workflow should invoke gsd-discuss-phase when INTERACTIVE is set'
     );
   });
 

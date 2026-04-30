@@ -111,20 +111,46 @@ describe('slash-command namespace invariant (#2697)', () => {
     );
   });
 
-  test('fix-slash-commands rewrites retired colon syntax to hyphen syntax', () => {
-    const script = fs.readFileSync(path.join(ROOT, 'scripts', 'fix-slash-commands.cjs'), 'utf-8');
-    assert.ok(
-      script.includes('/gsd:('),
-      'fix-slash-commands.cjs must match retired /gsd:<cmd> syntax',
-    );
-    assert.ok(
-      script.includes('`/gsd-${cmd}`'),
-      'fix-slash-commands.cjs must rewrite to canonical /gsd-<cmd> syntax',
-    );
-    assert.ok(
-      !script.includes('`/gsd:${cmd}`'),
-      'fix-slash-commands.cjs must not rewrite canonical hyphen syntax back to colon syntax',
-    );
+  describe('fix-slash-commands transformer behavior', () => {
+    const { transformContent } = require(path.join(ROOT, 'scripts', 'fix-slash-commands.cjs'));
+    // Use the live command names so the transformer matches the same surface
+    // the production CLI rewrites.
+    const liveCmdNames = cmdNames;
+
+    test('rewrites /gsd:<cmd> to /gsd-<cmd>', () => {
+      const out = transformContent('See /gsd:plan-phase for details.', liveCmdNames);
+      assert.ok(out.includes('/gsd-plan-phase'), `expected /gsd-plan-phase, got: ${out}`);
+      assert.ok(!out.includes('/gsd:plan-phase'), `colon form must not survive, got: ${out}`);
+    });
+
+    test('rewrites multiple occurrences in one pass', () => {
+      const out = transformContent('Run /gsd:plan-phase then /gsd:execute-phase.', liveCmdNames);
+      assert.ok(out.includes('/gsd-plan-phase'));
+      assert.ok(out.includes('/gsd-execute-phase'));
+      assert.ok(!out.match(/\/gsd:[a-z]/), `no colon form may remain, got: ${out}`);
+    });
+
+    test('does not rewrite canonical hyphen form (idempotent)', () => {
+      const input = '/gsd-plan-phase is the canonical name.';
+      assert.strictEqual(transformContent(input, liveCmdNames), input,
+        'transformer must be a no-op when input is already canonical');
+    });
+
+    test('does not rewrite gsd-sdk or gsd-tools (not slash commands)', () => {
+      // Edge case: even though sdk/tools aren't in cmdNames, defensively check
+      // that strings like "/gsd:sdk" pass through untouched.
+      const input = 'Run /gsd:sdk query and /gsd:tools init.';
+      assert.strictEqual(transformContent(input, liveCmdNames), input,
+        'transformer must leave non-command identifiers alone');
+    });
+
+    test('respects word boundary — does not rewrite /gsd:plan-phase-extra', () => {
+      // The trailing -extra means this is NOT the plan-phase command.
+      // The negative lookahead `[^a-zA-Z0-9_-]|$` should prevent the match.
+      const out = transformContent('/gsd:plan-phase-extra', liveCmdNames);
+      assert.strictEqual(out, '/gsd:plan-phase-extra',
+        'word-boundary lookahead must prevent partial matches');
+    });
   });
 
   test('gsd-sdk and gsd-tools identifiers are not rewritten', () => {
