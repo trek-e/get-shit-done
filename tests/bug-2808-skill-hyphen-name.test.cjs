@@ -104,7 +104,13 @@ describe('bug-2808: SKILL.md name: uses hyphen form', () => {
         // Tolerate whitespace around the parenthesis, the `skill` keyword,
         // and the `=` so variants like `Skill( skill = "gsd:foo" )` are still
         // flagged. Without the `\s*` allowances, drift slips through this guard.
-        const colonCallRe = /Skill\(\s*skill\s*=\s*\\?['"]gsd:([a-z0-9-]+)\\?['"]/gi;
+        //
+        // The local-name capture must be permissive (`[^'"\s)]+`, not
+        // `[a-z0-9-]+`) — the whole purpose of this guard is to surface
+        // *malformed* drift, including legacy underscore-form names like
+        // `gsd:extract_learnings`. A character-class that excludes the very
+        // characters we need to flag would silently let drift through.
+        const colonCallRe = /Skill\(\s*skill\s*=\s*\\?['"]gsd:([^'"\s)]+)\\?['"]/gi;
         let m;
         while ((m = colonCallRe.exec(line)) !== null) {
           colonCalls.push(`${path.basename(f)}: Skill(skill="gsd:${m[1]}")`);

@@ -41,15 +41,33 @@ const SEARCH_DIRS = [
   COMMANDS_DIR,
 ];
 
-const DOC_SEARCH_FILES = [
-  'README.md',
-  'docs/AGENTS.md',
-  'docs/ARCHITECTURE.md',
-  'docs/CLI-TOOLS.md',
-  'docs/COMMANDS.md',
-  'docs/FEATURES.md',
-  'docs/USER-GUIDE.md',
-].map((rel) => path.join(ROOT, rel));
+// Discover user-facing markdown surfaces dynamically so a freshly added
+// doc (a new RELEASE-*.md, a new top-level guide) is automatically scanned
+// for namespace drift. A hand-curated list silently weakens drift detection
+// over time — every time a doc is added, someone has to remember to extend
+// the list, and the failure mode is invisible: the test passes but doesn't
+// actually inspect the new file. We scan every .md under docs/ plus
+// README.md at the repo root.
+function discoverDocSearchFiles(root) {
+  const out = [];
+  const readme = path.join(root, 'README.md');
+  if (fs.existsSync(readme)) out.push(readme);
+  const docsDir = path.join(root, 'docs');
+  let entries;
+  try {
+    entries = fs.readdirSync(docsDir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.endsWith('.md')) {
+      out.push(path.join(docsDir, entry.name));
+    }
+  }
+  return out.sort();
+}
+
+const DOC_SEARCH_FILES = discoverDocSearchFiles(ROOT);
 
 const EXTENSIONS = new Set(['.md', '.cjs', '.js']);
 
